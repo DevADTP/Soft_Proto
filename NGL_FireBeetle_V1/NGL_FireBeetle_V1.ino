@@ -50,32 +50,82 @@ https://techtutorialsx.com/2017/06/05/esp-wroom-32-uploading-a-program-with-ardu
   /*==============================================================================
 **                             Local Defines                                    **
 ================================================================================*/
-#define LED   2
+#define LED   25  
 #define CLOCK 19
+
+#define DELAY_PWM 10
 
  /*===============================================================================
  **                            Global Variables                                 **
  ===============================================================================*/
 //int ledPin = 2;
 
+int pwmChannel = 0; //Choisit le canal 0
+int pwmChannel_clock = 1; //Choisit le canal 0
+
+
+int frequence = 1000; //Fréquence PWM de 1 KHz
+int resolution = 8; // Résolution de 8 bits, 256 valeurs possibles
+
+int pwmPin = 25;
+int Pin_clock = 19;
 
 void setup() {
+
+  /*
 // Set LED as output
     pinMode(LED, OUTPUT);
 
     
   Serial.begin(115200);
+  */
+
+      // Configuration du canal 0 avec la fréquence et la résolution choisie
+    ledcSetup(pwmChannel, frequence, resolution);
+
+    // Assigne le canal PWM au pin 25
+    ledcAttachPin(pwmPin, pwmChannel);
+
+    // Créer la tension en sortie choisi
+    ledcWrite(pwmChannel, 127); //1.65 V
+
+    //-----------
+
+      // Configuration du canal 0 avec la fréquence et la résolution choisie
+    ledcSetup(pwmChannel_clock, frequence, resolution);
+
+    // Assigne le canal PWM au 
+    ledcAttachPin(Pin_clock, pwmChannel_clock);
+
+    // Créer la tension en sortie choisi
+    ledcWrite(pwmChannel_clock, 127); //1.65 V
+
+    
 }
  
 void loop() {
+
+  /*
     Serial.print("Hello");
     digitalWrite(LED, HIGH);
     
-    delay(500);
+    delay(100);
     
     Serial.println(" world!");
     digitalWrite(LED, LOW);
     
-    delay(500);
+    delay(100);
+
+     */
+
+
+         // Augmente la luminosité de la led
+    for(int dutyCycle = 0; dutyCycle <= 169; dutyCycle++){
+      
+        ledcWrite(pwmChannel, dutyCycle); //1.65 V
+        delay(DELAY_PWM);
+                                                         }
+
+             ledcWrite(pwmChannel_clock, 127); //1.65 V de temps haut --> clock  
 
 }

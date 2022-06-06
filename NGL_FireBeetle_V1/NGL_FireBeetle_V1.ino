@@ -53,6 +53,8 @@ https://techtutorialsx.com/2017/06/05/esp-wroom-32-uploading-a-program-with-ardu
 
 #include <Wire.h>
 #include <MCP342x.h>
+#include <WiFi.h>
+
 
 
   /*==============================================================================
@@ -65,8 +67,11 @@ https://techtutorialsx.com/2017/06/05/esp-wroom-32-uploading-a-program-with-ardu
 
 #define BRIGHTNESS_LED 69    // 8 Bits
 
-#define I2C_SDA 21
-#define I2C_SCL 22
+#define I2C_SDA 22
+#define I2C_SCL 21
+//#define Addr 0x68
+
+
 
  /*===============================================================================
  **                            Global Variables                                 **
@@ -77,7 +82,7 @@ int pwmChannel = 0; //Choisit le canal 0
 int pwmChannel_clock = 1; //Choisit le canal 0
 
 
-int frequence = 1000; //Fréquence PWM de 1 KHz
+int frequence = 1500; //Fréquence PWM de 1 KHz
 int resolution = 8; // Résolution de 8 bits, 256 valeurs possibles
 
 int pwmPin = 25;
@@ -91,6 +96,11 @@ int OutBatValue = 0;
 int OutNtcValue = 0;
 
 float OutBatVolt = 0;
+
+
+uint8_t address = 0x68;
+MCP342x adc = MCP342x(address);
+float fOutSens_V = 0;
 
 void setup() {
 
@@ -128,8 +138,44 @@ void setup() {
     pinMode(Out_Ntc_PIN,INPUT_PULLUP);
     
     //----------- I²C ----------- 
+    pinMode(I2C_SCL, INPUT_PULLUP); 
+    pinMode(I2C_SDA, INPUT_PULLUP);
     Wire.begin(I2C_SDA, I2C_SCL);
-    Serial.println("\nI2C Scanner");
+
+   // Reset devices
+  MCP342x::generalCallReset();
+  delay(1); // MC342x needs 300us to settle, wait 1ms
+  
+  // Check device present
+  Wire.requestFrom(address, (uint8_t)1);
+  if (!Wire.available()) {
+    Serial.print("No device found at address ");
+    Serial.println(address, HEX);
+    while (1)
+      ;
+  }
+
+
+
+
+/*
+    //----------- Wifi ----------- 
+
+    delay(1000);
+WiFi.begin(ssid);
+Serial.println("\nConnecting");
+
+while(WiFi.status() != WL_CONNECTED){
+    Serial.print(".");
+    delay(100);
+
+    }
+
+Serial.println("\nConnected to the WiFi network");
+Serial.print("Local ESP32 IP: ");
+Serial.println(WiFi.localIP());
+
+*/
 }
  
 void loop() {
@@ -172,37 +218,37 @@ void loop() {
         Serial.print("Out_Ntc =");
         Serial.println(OutNtcValue);
         delay(250);
-       // ********* I²C *********      
+       // ********* I²C *********  
 
-         byte error, address;
-  int nDevices;
-  Serial.println("Scanning...");
-  nDevices = 0;
-  for(address = 1; address < 127; address++ ) {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
-    if (error == 0) {
-      Serial.print("I2C device found at address 0x");
-      if (address<16) {
-        Serial.print("0");
-      }
-      Serial.println(address,HEX);
-      nDevices++;
-    }
-    else if (error==4) {
-      Serial.print("Unknow error at address 0x");
-      if (address<16) {
-        Serial.print("0");
-      }
-      Serial.println(address,HEX);
-    }    
-  }
-  if (nDevices == 0) {
-    Serial.println("No I2C devices found\n");
+
+  long value = 0;
+  MCP342x::Config status;
+  // Initiate a conversion; convertAndRead() will wait until it can be read
+  uint8_t err = adc.convertAndRead(MCP342x::channel1, MCP342x::oneShot,
+           MCP342x::resolution16, MCP342x::gain1,
+           1000000, value, status);
+  if (err) {
+    Serial.print("Convert error: ");
+    Serial.println(err);
   }
   else {
-    Serial.println("done\n");
+    Serial.print("Value sur 16 Bits signed: ");
+    Serial.println(value);
   }
-  delay(5000);  
+  
+  delay(1000);
 
-}
+// 32 767 est le max puisqu'il y a un bit de signe
+// Donc sur 15 Bits puisqu'on est en single ended
+
+// Conversion en volt:
+
+fOutSens_V = (3.3/32767 )* value;
+    Serial.print("Value OUT_SENS: ");
+    Serial.print(fOutSens_V);
+    Serial.println(" V ");
+
+    // Voir pour plus de chiffre sur le float
+  
+}       
+         

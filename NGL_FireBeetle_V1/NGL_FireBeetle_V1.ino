@@ -6,7 +6,7 @@
 ** Author      :  Benoit                                                     **
 ** Created on  :  Jui 1, 2022                                                **
 **---------------------------------------------------------------------------**
-** Description : Controls the NGL_Proto PCB                                  **
+** Description : Controls the NGL_Proto_ST PCB                               **
 *                 with ESP32 WROOM-32D-N16                                   **
 =============================================================================*/
 
@@ -17,21 +17,35 @@
 =============================================================================*/
 
 /*
-LED BLUE  --> IO25
-CLOCK_GEN --> IO19
-
+------ SPI ------
 MISO      --> IO12
 MOSI      --> IO13
 CLK       --> IO14
-CS        --> IO15
 
+CS_SPARE  --> IO16
+CS_R10    --> IO16
+CS_R2     --> IO17
+
+------ I²C ------
 SCL       --> IO21
 SDA       --> IO22
 
+------ ADC ------
+OUT_NTC   --> IO36 --> SENSOR_VP 
+OUT_BAT   --> IO39 --> SENSOR_VN
+
+------ OTHERS ------
+
+LED BLUE  --> IO25
+
+CLOCK_GEN --> IO32
+
+INH       --> IO23
+
 NEO       --> IO26
 
-OUT_NTC   --> SENSOR_VP --> IO36 
-OUT_BAT   --> SENSOR_VN --> IO39
+MOTEUR    --> IO18
+
 
 Flash par UART ! 
 ESP32 uniquement en 3.3 V ! 
@@ -49,6 +63,7 @@ INFOS:
 Librairie ESP32 Utilisé avec comme board ESP32_FireBeetle pour l'ESP Wroom
 https://techtutorialsx.com/2017/06/05/esp-wroom-32-uploading-a-program-with-arduino-ide/
 
+BOARD: ESP32 Arduino --> FireBeetle-ESP32
 */
 
 #include <Wire.h>
@@ -61,7 +76,7 @@ https://techtutorialsx.com/2017/06/05/esp-wroom-32-uploading-a-program-with-ardu
 **                             Local Defines                                    **
 ================================================================================*/
 #define LED   25  
-#define CLOCK 19
+#define CLOCK 14
 
 #define DELAY_PWM 10
 
@@ -104,11 +119,13 @@ float fOutSens_V = 0;
 
 void setup() {
 
-  /*
+  //********* Hello woorld de test ********
 // Set LED as output
     pinMode(LED, OUTPUT);
 
-      */
+     
+
+      /*
   Serial.begin(115200);
 
    //----------- PWN LED ----------- 
@@ -159,28 +176,12 @@ void setup() {
 
 
 /*
-    //----------- Wifi ----------- 
-
-    delay(1000);
-WiFi.begin(ssid);
-Serial.println("\nConnecting");
-
-while(WiFi.status() != WL_CONNECTED){
-    Serial.print(".");
-    delay(100);
-
-    }
-
-Serial.println("\nConnected to the WiFi network");
-Serial.print("Local ESP32 IP: ");
-Serial.println(WiFi.localIP());
-
 */
 }
  
 void loop() {
 
-  /*
+   //********* Hello woorld de test ********
     Serial.print("Hello");
     digitalWrite(LED, HIGH);
     
@@ -191,9 +192,9 @@ void loop() {
     
     delay(100);
 
-     */
+     
 
-
+/* 
          // ********* DIMMING LED *********
     for(int dutyCycle = 0; dutyCycle <= 169; dutyCycle++){
       
@@ -249,6 +250,6 @@ fOutSens_V = (3.3/32767 )* value;
     Serial.println(" V ");
 
     // Voir pour plus de chiffre sur le float
-  
+    */
 }       
          

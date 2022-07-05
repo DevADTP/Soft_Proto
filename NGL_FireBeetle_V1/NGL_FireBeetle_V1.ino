@@ -1,6 +1,4 @@
 
-
-
 /*============================== (c) 2022 ADTP ================================
 ** File Name   :  NGL_FireBeetle_V1                                          **
 ** Author      :  Benoit                                                     **
@@ -81,18 +79,21 @@ BOARD: ESP32 Arduino --> FireBeetle-ESP32
   /*==============================================================================
 **                             Local Defines                                    **
 ================================================================================*/
-#define LED   25  
-#define CLOCK 32
-#define MOTEUR 18
+#define LED_PIN      25  
+#define CLOCK_PIN    32
+#define MOTEUR_PIN   18
+#define I2C_SDA_PIN  22
+#define I2C_SCL_PIN  21
+#define OUT_BAT_PIN  39
+#define OUT_NTC_PIN  36
 
-
-#define DELAY_PWM 10
-#define DELAY_LOOP 500
+#define DELAY_PWM    10
+#define DELAY_LOOP   500
+#define CLOCK_FREQ   1500
 
 #define BRIGHTNESS_LED 69    // 8 Bits
 
-#define I2C_SDA 22
-#define I2C_SCL 21
+#define VREF_ADC 2.048
 //#define Addr 0x68
 
 #define RT0 30000   // Ω
@@ -102,21 +103,15 @@ BOARD: ESP32 Arduino --> FireBeetle-ESP32
  /*===============================================================================
  **                            Global Variables                                 **
  ===============================================================================*/
-//int ledPin = 2;
 
 int pwmChannel = 0; //Choisit le canal 0
 int pwmChannel_clock = 1; //Choisit le canal 0
-
-
-int frequence = 1500; //Fréquence PWM de 1 KHz
 int resolution = 8; // Résolution de 8 bits, 256 valeurs possibles
 
-int pwmPin = 25;
-int Pin_clock = 32;
 
 // Le OUT BATTERIE est connecté au GPIO 36 (Pin VP)
-const int Out_Bat_PIN = 39;
-const int Out_Ntc_PIN = 36;
+//const int Out_Bat_PIN = 39;
+//const int Out_Ntc_PIN = 36;
 
 int OutBatValue = 0;
 int OutNtcValue = 0;
@@ -144,11 +139,10 @@ void setup() {
 
    //----------- PWN LED ----------- 
       // Configuration du canal 0 avec la fréquence et la résolution choisie
-    ledcSetup(pwmChannel, frequence, resolution);
+    ledcSetup(pwmChannel, CLOCK_FREQ, resolution);
 
     // Assigne le canal PWM au pin 25
-    ledcAttachPin(pwmPin, pwmChannel);
-    ledcAttachPin(MOTEUR, pwmChannel);
+    ledcAttachPin(LED_PIN, pwmChannel);
 
     // Créer la tension en sortie choisi
     ledcWrite(pwmChannel, 127); //1.65 V
@@ -156,10 +150,10 @@ void setup() {
     //----------- PWN Clock ----------- 
 
       // Configuration du canal 0 avec la fréquence et la résolution choisie
-    ledcSetup(pwmChannel_clock, frequence, resolution);
+    ledcSetup(pwmChannel_clock, CLOCK_FREQ, resolution);
 
     // Assigne le canal PWM au 
-    ledcAttachPin(Pin_clock, pwmChannel_clock);
+    ledcAttachPin(CLOCK_PIN, pwmChannel_clock);
 
     // Créer la tension en sortie choisi
     ledcWrite(pwmChannel_clock, BRIGHTNESS_LED); //1.65 V
@@ -169,30 +163,16 @@ void setup() {
 
     //----------- ADC ----------- 
    // ******** pinMode(Out_Bat_PIN,INPUT_PULLUP); ******** //3.8 V pour l'instant sur out BAT donc ne pas déclarer
-    pinMode(Out_Ntc_PIN,INPUT_PULLUP);
+    pinMode(OUT_NTC_PIN,INPUT_PULLUP);
     
     //----------- I²C ----------- 
-    pinMode(I2C_SCL, INPUT_PULLUP); 
-    pinMode(I2C_SDA, INPUT_PULLUP);
-    Wire.begin(I2C_SDA, I2C_SCL);
+    pinMode(I2C_SCL_PIN, INPUT_PULLUP); 
+    pinMode(I2C_SDA_PIN, INPUT_PULLUP);
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
    // Reset devices
   MCP342x::generalCallReset();
   delay(1); // MC342x needs 300us to settle, wait 1ms
-  /*
-  // Check device present
-  Wire.requestFrom(address, (uint8_t)1);
-  if (!Wire.available()) {
-    Serial.print("No device found at address ");
-    Serial.println(address, HEX);
-    while (1)
-      ;
-  }
-
-
- */
-
-
 
 }
  
@@ -235,7 +215,7 @@ void loop() {
         delay(250);
 */
           // ********* NTC *********
-        VRT = analogRead(Out_Ntc_PIN);
+        VRT = analogRead(OUT_NTC_PIN );
         VRT = (3.30 / 4096.00) * VRT;      //Conversion to voltage
         Serial.print("Out_NTC = ");
         Serial.print(VRT);
@@ -261,12 +241,12 @@ void loop() {
        // ********* I²C *********  
 
 //***** Channel 1
-  long value = 0;
+  long value = 0;  // Essai en int  16 Signed: int16_t
+   //int16_t value = 0;
+ 
   MCP342x::Config status;
   // Initiate a conversion; convertAndRead() will wait until it can be read
-  uint8_t err = adc.convertAndRead(MCP342x::channel1, MCP342x::oneShot,
-           MCP342x::resolution16, MCP342x::gain1,
-           1000000, value, status);
+  uint8_t err = adc.convertAndRead(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, value, status);
   if (err) {
     Serial.print("Convert error: ");
     Serial.println(err);
@@ -281,12 +261,12 @@ void loop() {
 
   //***** Channel 2
 
-    long valueDiff = 0;
+   long valueDiff = 0;
+   // Essai en int  16 Signed: int16_t
+   //int16_t valueDiff = 0;
 //  MCP342x::Config status;
   // Initiate a conversion; convertAndRead() will wait until it can be read
-  uint8_t err2 = adc.convertAndRead(MCP342x::channel2, MCP342x::oneShot,
-           MCP342x::resolution16, MCP342x::gain1,
-           1000000, valueDiff, status);
+  uint8_t err2 = adc.convertAndRead(MCP342x::channel2, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, valueDiff, status);
   if (err) {
     Serial.print("Convert error: ");
     Serial.println(err);
@@ -304,14 +284,14 @@ void loop() {
 
  // ********* Conversion en Volt ********* 
 
-
-    fOutSens_V = (3.3/32767 )* value;
+    fOutSens_V = (VREF_ADC/32767 )* value; // Attention vref = 2.048 V
     Serial.print("OUT_SENS = ");
     Serial.print(fOutSens_V);
     Serial.print(" V ");
     Serial.print(" \t ");
+  
 
-    fOutDiff_V = (3.3/32767 )* valueDiff;
+    fOutDiff_V = (VREF_ADC/32767 )* valueDiff;
     Serial.print("OUT_DIFF = ");
     Serial.print(fOutDiff_V);
     Serial.println(" V "); //dernier ln

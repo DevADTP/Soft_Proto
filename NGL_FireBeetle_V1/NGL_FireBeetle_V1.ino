@@ -148,7 +148,10 @@ void setup() {
   Serial.begin(115200);
   
   SerialBT.begin("NGL_PROTO_ESP32"); //Bluetooth device name
+
   Serial.println("The device started, now you can pair it with bluetooth!");
+ 
+  
 
    //----------- PWN LED ----------- 
       // Configuration du canal 0 avec la fréquence et la résolution choisie
@@ -194,7 +197,7 @@ void setup() {
  ===============================================================================*/
  
 void loop() {
-
+SerialBT.println("Bouillon en cours de mesure........");
 /*
    //********* Hello woorld de test ********
     Serial.print("Hello");

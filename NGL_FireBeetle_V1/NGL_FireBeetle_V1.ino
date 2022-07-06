@@ -72,7 +72,9 @@ BOARD: ESP32 Arduino --> FireBeetle-ESP32
 
 #include <Wire.h>
 #include <MCP342x.h>
+#include "BluetoothSerial.h"
 //#include <WiFi.h>
+
 
 
 
@@ -100,6 +102,10 @@ BOARD: ESP32 Arduino --> FireBeetle-ESP32
 #define B 3977      // K
 #define VCC 3.30    //Supply voltage
 #define R 10000  //R=10KΩ
+
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+#endif
  /*===============================================================================
  **                            Global Variables                                 **
  ===============================================================================*/
@@ -124,7 +130,11 @@ float RT, VR, ln, TXX, Temp_0, VRT;
 uint8_t address = 0x68;
 MCP342x adc = MCP342x(address);
 
+BluetoothSerial SerialBT;
 
+ /*===============================================================================
+ **                            SETUP()                                          **
+ ===============================================================================*/
 
 void setup() {
 /*
@@ -134,8 +144,11 @@ void setup() {
 
      */
   Temp_0 = 25 + 273.15;  
-      
+  //----------- BT -----------   
   Serial.begin(115200);
+  
+  SerialBT.begin("NGL_PROTO_ESP32"); //Bluetooth device name
+  Serial.println("The device started, now you can pair it with bluetooth!");
 
    //----------- PWN LED ----------- 
       // Configuration du canal 0 avec la fréquence et la résolution choisie
@@ -175,6 +188,10 @@ void setup() {
   delay(1); // MC342x needs 300us to settle, wait 1ms
 
 }
+
+ /*===============================================================================
+ **                            LOOP()                                          **
+ ===============================================================================*/
  
 void loop() {
 
@@ -234,6 +251,11 @@ void loop() {
         Serial.print(TXX);
         Serial.print(" °C ");
         Serial.print(" \t ");
+        //BT
+        SerialBT.print("Temp = ");
+        SerialBT.print(TXX);
+        SerialBT.print(" °C ");
+        SerialBT.print(" \t ");
 
        
         delay(250);
@@ -289,12 +311,25 @@ void loop() {
     Serial.print(fOutSens_V);
     Serial.print(" V ");
     Serial.print(" \t ");
+    //BT
+    SerialBT.print("OUT_SENS = ");
+    SerialBT.print(fOutSens_V);
+    SerialBT.println(" V "); //last BT
+              
   
-
     fOutDiff_V = (VREF_ADC/32767 )* valueDiff;
     Serial.print("OUT_DIFF = ");
     Serial.print(fOutDiff_V);
-    Serial.println(" V "); //dernier ln
+    Serial.println(" V "); //last Serial
+
+// ********* BT ********* 
+  if (Serial.available()) {
+    SerialBT.write(Serial.read());
+  }
+  if (SerialBT.available()) {
+    Serial.write(SerialBT.read());
+  }
+  delay(20);
    
     delay(DELAY_LOOP) ;
     // Voir pour plus de chiffre sur le float

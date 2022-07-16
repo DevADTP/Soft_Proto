@@ -67,7 +67,8 @@ INFOS:
 Librairie ESP32 Utilisé avec comme board ESP32_FireBeetle pour l'ESP Wroom
 https://techtutorialsx.com/2017/06/05/esp-wroom-32-uploading-a-program-with-arduino-ide/
 
-BOARD: ESP32 Arduino --> FireBeetle-ESP32
+BOARD: ESP32 Arduino --> ESP32 Dev Module
+Partition size = 16 MB
 */
 
 #include <Wire.h>
@@ -76,6 +77,11 @@ BOARD: ESP32 Arduino --> FireBeetle-ESP32
 
 #include "Config_NGL.h"
 //#include <WiFi.h>
+
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
+#include <BLE2902.h>
 
 
 
@@ -91,8 +97,9 @@ BOARD: ESP32 Arduino --> FireBeetle-ESP32
 #define OUT_BAT_PIN  39
 #define OUT_NTC_PIN  36
 
-#define DELAY_PWM    10
-#define DELAY_LOOP   420
+#define DELAY_PWM         10
+#define DELAY_LOOP        420
+#define DELAY_SEND_BLE    51
 
 #define CLOCK_FREQ   1500
 
@@ -111,6 +118,11 @@ BOARD: ESP32 Arduino --> FireBeetle-ESP32
 #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
 #endif
 
+// See the following for generating UUIDs:
+// https://www.uuidgenerator.net/
+
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
  /*===============================================================================
  **                            Global Variables                                 **
@@ -139,6 +151,23 @@ MCP342x adc = MCP342x(address);
 
 BluetoothSerial SerialBT;
 
+BLEServer* pServer = NULL;
+BLECharacteristic* pCharacteristic = NULL;
+bool deviceConnected = false;
+bool oldDeviceConnected = false;
+//uint32_t value = 0;
+
+class MyServerCallbacks: public BLEServerCallbacks {
+    void onConnect(BLEServer* pServer) {
+      deviceConnected = true;
+    };
+ 
+    void onDisconnect(BLEServer* pServer) {
+      deviceConnected = false;
+    }
+};
+ 
+
 
  /*===============================================================================
  **                            SETUP()                                          **
@@ -157,6 +186,42 @@ void setup() {
   Setup_ADC();
   Setup_I2C();
   Setup_SERIAL();
+//________________________BLE______________________
+    // Create the BLE Device
+  BLEDevice::init("ESP32-BLE_NGL-Proto");
+ 
+  // Create the BLE Server
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+ 
+  // Create the BLE Service
+  BLEService *pService = pServer->createService(SERVICE_UUID);
+ 
+  // Create a BLE Characteristic
+  pCharacteristic = pService->createCharacteristic(
+                      CHARACTERISTIC_UUID,
+                      BLECharacteristic::PROPERTY_READ   |
+                      BLECharacteristic::PROPERTY_WRITE  |
+                      BLECharacteristic::PROPERTY_NOTIFY |
+                      BLECharacteristic::PROPERTY_INDICATE
+                    );
+ 
+  // https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.descriptor.gatt.client_characteristic_configuration.xml
+  // Create a BLE Descriptor
+  pCharacteristic->addDescriptor(new BLE2902());
+ 
+  // Start the service
+  pService->start();
+ 
+  // Start advertising
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pAdvertising->setScanResponse(false);
+  pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
+  BLEDevice::startAdvertising();
+  Serial.println("Waiting a client connection to notify...");
+
+
 
 }
 
@@ -301,6 +366,31 @@ SerialBT.println("Bouillon en cours de mesure........");
     Serial.write(SerialBT.read());
   }
   delay(20);
+//------------------ BLE -------------------------
+  if (deviceConnected) {
+  // Transformqtion en chaine de carac
+        char txString[8];
+        dtostrf(value, 1, 2, txString);
+
+        pCharacteristic->setValue(txString); // SEND
+
+        pCharacteristic->notify();
+        //Serial.println(value);
+        
+        delay(DELAY_SEND_BLE); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
+    }
+    // disconnecting
+    if (!deviceConnected && oldDeviceConnected) {
+        delay(500); // give the bluetooth stack the chance to get things ready
+        pServer->startAdvertising(); // restart advertising
+        Serial.println("start advertising");
+        oldDeviceConnected = deviceConnected;
+    }
+    // connecting
+    if (deviceConnected && !oldDeviceConnected) {
+        // do stuff here on connecting
+        oldDeviceConnected = deviceConnected;
+    }
    
     delay(DELAY_LOOP) ;
     // Voir pour plus de chiffre sur le float

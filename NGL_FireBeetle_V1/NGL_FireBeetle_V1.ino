@@ -73,6 +73,8 @@ BOARD: ESP32 Arduino --> FireBeetle-ESP32
 #include <Wire.h>
 #include <MCP342x.h>
 #include "BluetoothSerial.h"
+
+#include "Config_NGL.h"
 //#include <WiFi.h>
 
 
@@ -90,10 +92,12 @@ BOARD: ESP32 Arduino --> FireBeetle-ESP32
 #define OUT_NTC_PIN  36
 
 #define DELAY_PWM    10
-#define DELAY_LOOP   500
+#define DELAY_LOOP   420
+
 #define CLOCK_FREQ   1500
 
-#define BRIGHTNESS_LED 69    // 8 Bits
+
+#define BRIGHTNESS_LED 121    // 8 Bits
 
 #define VREF_ADC 2.048
 //#define Addr 0x68
@@ -106,13 +110,12 @@ BOARD: ESP32 Arduino --> FireBeetle-ESP32
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
 #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
 #endif
+
+
  /*===============================================================================
  **                            Global Variables                                 **
  ===============================================================================*/
 
-int pwmChannel = 0; //Choisit le canal 0
-int pwmChannel_clock = 1; //Choisit le canal 0
-int resolution = 8; // Résolution de 8 bits, 256 valeurs possibles
 
 
 // Le OUT BATTERIE est connecté au GPIO 36 (Pin VP)
@@ -127,10 +130,15 @@ float fOutSens_V = 0;
 float fOutDiff_V = 0;
 float RT, VR, ln, TXX, Temp_0, VRT;
 
+ int pwmChannel = 0; //Choisit le canal 0
+ int pwmChannel_clock = 1; //Choisit le canal 0
+ int resolution = 8; // Résolution de 8 bits, 256 valeurs possibles
+
 uint8_t address = 0x68;
 MCP342x adc = MCP342x(address);
 
 BluetoothSerial SerialBT;
+
 
  /*===============================================================================
  **                            SETUP()                                          **
@@ -143,52 +151,12 @@ void setup() {
     pinMode(LED, OUTPUT);
 
      */
-  Temp_0 = 25 + 273.15;  
-  //----------- BT -----------   
-  Serial.begin(115200);
-  
-  SerialBT.begin("NGL_PROTO_ESP32"); //Bluetooth device name
+  Temp_0 = 25 + 273.15;
 
-  Serial.println("The device started, now you can pair it with bluetooth!");
- 
-  
-
-   //----------- PWN LED ----------- 
-      // Configuration du canal 0 avec la fréquence et la résolution choisie
-    ledcSetup(pwmChannel, CLOCK_FREQ, resolution);
-
-    // Assigne le canal PWM au pin 25
-    ledcAttachPin(LED_PIN, pwmChannel);
-
-    // Créer la tension en sortie choisi
-    ledcWrite(pwmChannel, 127); //1.65 V
-
-    //----------- PWN Clock ----------- 
-
-      // Configuration du canal 0 avec la fréquence et la résolution choisie
-    ledcSetup(pwmChannel_clock, CLOCK_FREQ, resolution);
-
-    // Assigne le canal PWM au 
-    ledcAttachPin(CLOCK_PIN, pwmChannel_clock);
-
-    // Créer la tension en sortie choisi
-    ledcWrite(pwmChannel_clock, BRIGHTNESS_LED); //1.65 V
-
-    //pinMode(MOTEUR , OUTPUT);    // sets the digital pin 13 as output
-
-
-    //----------- ADC ----------- 
-   // ******** pinMode(Out_Bat_PIN,INPUT_PULLUP); ******** //3.8 V pour l'instant sur out BAT donc ne pas déclarer
-    pinMode(OUT_NTC_PIN,INPUT_PULLUP);
-    
-    //----------- I²C ----------- 
-    pinMode(I2C_SCL_PIN, INPUT_PULLUP); 
-    pinMode(I2C_SDA_PIN, INPUT_PULLUP);
-    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-
-   // Reset devices
-  MCP342x::generalCallReset();
-  delay(1); // MC342x needs 300us to settle, wait 1ms
+  Setup_PWM();
+  Setup_ADC();
+  Setup_I2C();
+  Setup_SERIAL();
 
 }
 

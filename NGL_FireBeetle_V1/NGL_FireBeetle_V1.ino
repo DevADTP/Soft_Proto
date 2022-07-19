@@ -73,7 +73,7 @@ Partition size = 16 MB
 
 #include <Wire.h>
 #include <MCP342x.h>
-#include "BluetoothSerial.h"
+//#include "BluetoothSerial.h"
 
 #include "Config_NGL.h"
 //#include <WiFi.h>
@@ -114,18 +114,23 @@ Partition size = 16 MB
 #define VCC 3.30    //Supply voltage
 #define R 10000  //R=10KΩ
 
-#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
-#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
-#endif
+// #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+// #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+// #endif
 
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
 
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+// #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+// #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
 // #define SERVICE_TEMP_UUID        "1defff16-5a0a-423b-b2d1-8abcddb67d8a"
 // #define CHARACTERISTIC_TEMP_UUID "58f7494b-2e34-4bf3-ac42-9bd49445f277"
+
+//original
+#define SERVICE_UUID           "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
+#define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+#define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
  /*===============================================================================
  **                            Global Variables                                 **
@@ -152,14 +157,13 @@ float RT, VR, ln, TXX, Temp_0, VRT;
 uint8_t address = 0x68;
 MCP342x adc = MCP342x(address);
 
-BluetoothSerial SerialBT;
+//BluetoothSerial SerialBT;
 
 BLEServer* pServer = NULL;
 BLECharacteristic* pCharacteristic = NULL;
-// BLECharacteristic* pCharacteristic_TEMP = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
-//uint32_t value = 0;
+uint32_t value = 0;
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -170,6 +174,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
       deviceConnected = false;
     }
 };
+
  
 
 
@@ -200,38 +205,24 @@ void setup() {
  
   // Create the BLE Service
   BLEService *pService = pServer->createService(SERVICE_UUID);
-  // BLEService *MyServiceTEMP = pServer->createService(SERVICE_TEMP_UUID);
  
   // Create a BLE Characteristic
   pCharacteristic = pService->createCharacteristic(
-                      CHARACTERISTIC_UUID,
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_WRITE  |
-                      BLECharacteristic::PROPERTY_NOTIFY |
-                      BLECharacteristic::PROPERTY_INDICATE
+                      CHARACTERISTIC_UUID_TX,
+                      BLECharacteristic::PROPERTY_NOTIFY                    
                     );
-  // pCharacteristic_TEMP = MyServiceTEMP->createCharacteristic(
-  //                     CHARACTERISTIC_UUID,
-  //                     BLECharacteristic::PROPERTY_READ   |
-  //                     BLECharacteristic::PROPERTY_WRITE  |
-  //                     BLECharacteristic::PROPERTY_NOTIFY |
-  //                     BLECharacteristic::PROPERTY_INDICATE
-  //                   );
  
   // https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.descriptor.gatt.client_characteristic_configuration.xml
   // Create a BLE Descriptor
   pCharacteristic->addDescriptor(new BLE2902());
-  // pCharacteristic_TEMP->addDescriptor(new BLE2902());
  
   // Start the service
   pService->start();
-  // MyServiceTEMP->start();
   
   // Start advertising
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   
   pAdvertising->addServiceUUID(SERVICE_UUID);
-  // pAdvertising->addServiceUUID(SERVICE_TEMP_UUID);
   
   pAdvertising->setScanResponse(false);
   pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
@@ -248,7 +239,7 @@ void setup() {
  ===============================================================================*/
  
 void loop() {
-SerialBT.println("Bouillon en cours de mesure........");
+//SerialBT.println("Bouillon en cours de mesure........");
 /*
    //********* Hello woorld de test ********
     Serial.print("Hello");
@@ -306,10 +297,10 @@ SerialBT.println("Bouillon en cours de mesure........");
         Serial.print(" °C ");
         Serial.print(" \t ");
         //BT
-        SerialBT.print("Temp = ");
-        SerialBT.print(TXX);
-        SerialBT.print(" °C ");
-        SerialBT.print(" \t ");
+        //SerialBT.print("Temp = ");
+        // SerialBT.print(TXX);
+        // SerialBT.print(" °C ");
+        // SerialBT.print(" \t ");
 
        
         delay(250);
@@ -366,9 +357,9 @@ SerialBT.println("Bouillon en cours de mesure........");
     Serial.print(" V ");
     Serial.print(" \t ");
     //BT
-    SerialBT.print("OUT_SENS = ");
-    SerialBT.print(fOutSens_V);
-    SerialBT.println(" V "); //last BT
+   // SerialBT.print("OUT_SENS = ");
+   // SerialBT.print(fOutSens_V);
+   // SerialBT.println(" V "); //last BT
               
   
     fOutDiff_V = (VREF_ADC/32767 )* valueDiff;
@@ -376,37 +367,72 @@ SerialBT.println("Bouillon en cours de mesure........");
     Serial.print(fOutDiff_V);
     Serial.println(" V "); //last Serial
 
-// ********* BT ********* 
-  if (Serial.available()) {
-    SerialBT.write(Serial.read());
-  }
-  if (SerialBT.available()) {
-    Serial.write(SerialBT.read());
-  }
-  delay(20);
+// // ********* BT ********* 
+//   if (Serial.available()) {
+//     SerialBT.write(Serial.read());
+//   }
+//   if (SerialBT.available()) {
+//     Serial.write(SerialBT.read());
+//   }
+//   delay(20);
 //------------------ BLE -------------------------
   if (deviceConnected) {
-  // Transformation en chaine de carac
-        char txString[8];
-        dtostrf(value, 1, 2, txString);
-        // char txStringTEMP[8];
-        // dtostrf(VRT, 1, 2, txString);
+  // // Transformation en chaine de carac
+  //       char txString[8];
+  //       dtostrf(value, 1, 2, txString);
+  //       // char txStringTEMP[8];
+  //       // dtostrf(VRT, 1, 2, txString);
 
-        pCharacteristic->setValue(txString); // SEND
-        // pCharacteristic_TEMP->setValue(txString); // SEND
+  //       pCharacteristic->setValue(txString); // SEND
+  //       // pCharacteristic_TEMP->setValue(txString); // SEND
 
-        pCharacteristic->notify();
-        // pCharacteristic_TEMP->notify();
-        //Serial.println(value);
+  //       pCharacteristic->notify();
+  //       // pCharacteristic_TEMP->notify();
+  //       //Serial.println(value);
         
-        delay(DELAY_SEND_BLE); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
+  //       delay(DELAY_SEND_BLE); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
+
+  // Let's convert the value to a char array:
+    char txString[16]; // make sure this is big enuffz
+    dtostrf(value, 7, 2, txString); // float_val, min_width, digits_after_decimal, char_buffer
+
+    char txString2[10]; // make sure this is big enuffz
+    dtostrf(VRT, 5, 1, txString2); // float_val, min_width, digits_after_decimal, char_buffer
+
+    //    La fonction dtostrf() prend quatre paramètres d’entrée.
+    //    La première est une variable de type double, que nous voulons convertir.
+    //    La seconde est une variable de type char utilisée pour définir la largeur de la variable de sortie ou le nombre de chiffres.
+    //    La troisième est une variable de type char utilisée pour définir le nombre de chiffres après la décimale.
+
+    int indice = 8;
+    txString[indice] = txString2[indice - 8];
+    indice++;
+    txString[indice] = txString2[indice - 8];
+    indice++;
+    txString[indice] = txString2[indice - 8];
+    indice++;
+    txString[indice] = txString2[indice - 8];
+    indice++;
+    txString[indice] = txString2[indice - 8];
+
+    //txString[14] = char(10);
+    txString[7] = 0x2C; //tab char(13);
+    txString[15] = 0x0A; //return line char(13);
+
+    //pTxCharacteristic->setValue(&txValue, 1);
+    pCharacteristic->setValue(txString);
+    //pTxCharacteristic->setValue(&txReturnValue, 8);
+    // pTxCharacteristic->setValue(&txReturnValue2, 9);
+    pCharacteristic->notify();
+    //if (int_type_measure == 1) txValue = 12 + random(0, 5);
+    //if (int_type_measure == 2) txValue = 150 + random(0, 50);
     }
     // disconnecting
     if (!deviceConnected && oldDeviceConnected) {
-        delay(500); // give the bluetooth stack the chance to get things ready
-        pServer->startAdvertising(); // restart advertising
-        Serial.println("start advertising");
-        oldDeviceConnected = deviceConnected;
+        // delay(500); // give the bluetooth stack the chance to get things ready
+        // pServer->startAdvertising(); // restart advertising
+        // Serial.println("start advertising");
+        // oldDeviceConnected = deviceConnected;
     }
     // connecting
     if (deviceConnected && !oldDeviceConnected) {

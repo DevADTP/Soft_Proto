@@ -28,15 +28,15 @@
 #define VCC 3.30    //Supply voltage
 #define R 10000  //R=10KΩ
 
-#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
-#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
-#endif
+// #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+// #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+// #endif
 
 extern int pwmChannel; //Choisit le canal 0
 extern int pwmChannel_clock; //Choisit le canal 0
 extern int resolution; // Résolution de 8 bits, 256 valeurs possibles
 
-extern BluetoothSerial SerialBT;
+// extern BluetoothSerial SerialBT;
 
 
 
@@ -91,7 +91,7 @@ void Setup_SERIAL(void)
 {
   Serial.begin(115200);
   
-  SerialBT.begin("NGL_PROTO_ESP32"); //Bluetooth device name
+ // SerialBT.begin("NGL_PROTO_ESP32"); //Bluetooth device name
    
   Serial.println("The device started, now you can pair it with bluetooth!");
 }

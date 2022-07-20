@@ -69,8 +69,8 @@ void Setup_ADC(void)
 {
   
     //----------- ADC ----------- 
-   // ******** pinMode(Out_Bat_PIN,INPUT_PULLUP); ******** //3.8 V pour l'instant sur out BAT donc ne pas déclarer
-    pinMode(OUT_NTC_PIN,INPUT_PULLUP);
+    pinMode(OUT_BAT_PIN,INPUT); //3.8 V pour l'instant sur out BAT donc ne pas déclarer
+    pinMode(OUT_NTC_PIN,INPUT);
 
         //pinMode(MOTEUR , OUTPUT);    // sets the digital pin 13 as output
 }

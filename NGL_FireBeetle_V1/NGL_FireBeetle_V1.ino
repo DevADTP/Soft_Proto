@@ -5,70 +5,69 @@
 ** Created on  :  Jui 1, 2022                                                **
 **---------------------------------------------------------------------------**
 ** Description : Controls the NGL_Proto_ST PCB                               **
-*                 with ESP32 WROOM-32D-N16                                   **
-=============================================================================*/
+                  with ESP32 WROOM-32D-N16                                   *
+  =============================================================================*/
 
 
 
 /*=============================================================================
 **                                 PINOUT                                     **
-=============================================================================*/
+  =============================================================================*/
 
 /*
------- SPI ------
-MISO      --> IO12
-MOSI      --> IO13
-CLK       --> IO14
+  ------ SPI ------
+  MISO      --> IO12
+  MOSI      --> IO13
+  CLK       --> IO14
 
-CS_SPARE  --> IO16
-CS_R10    --> IO16
-CS_R2     --> IO17
+  CS_SPARE  --> IO16
+  CS_R10    --> IO16
+  CS_R2     --> IO17
 
------- I²C ------
-SCL       --> IO21
-SDA       --> IO22
+  ------ I²C ------
+  SCL       --> IO21
+  SDA       --> IO22
 
------- ADC ------
-OUT_NTC   --> IO36 --> SENSOR_VP 
-OUT_BAT   --> IO39 --> SENSOR_VN
+  ------ ADC ------
+  OUT_NTC   --> IO36 --> SENSOR_VP
+  OUT_BAT   --> IO39 --> SENSOR_VN
 
------- OTHERS ------
+  ------ OTHERS ------
 
-LED BLUE  --> IO25
+  LED BLUE  --> IO25
 
-CLOCK_GEN --> IO32
+  CLOCK_GEN --> IO32
 
-INH       --> IO23
+  INH       --> IO23
 
-NEO       --> IO26
+  NEO       --> IO26
 
-MOTEUR    --> IO18
-
-
-Flash par UART ! 
-ESP32 uniquement en 3.3 V ! 
+  MOTEUR    --> IO18
 
 
-Hardware:
+  Flash par UART !
+  ESP32 uniquement en 3.3 V !
 
-Pont div sur VBAT: VS/VIN = 0.77
-Full charge à 4.2 V
 
-ADC MCP3426A0-E_SN
-16 Bits _ 15 SPS
+  Hardware:
+  Pont div sur VBAT: VS/VIN = 0.77
+  Full charge à 4.2 V
 
-thermistor parameters:
- * RT0: 30 000 Ω
- * B: 3977 K +- 0.75%
- * T0:  25 C
- * +- 5%
+  ADC MCP3426A0-E_SN
+  16 Bits _ 15 SPS
 
-INFOS:
-Librairie ESP32 Utilisé avec comme board ESP32_FireBeetle pour l'ESP Wroom
-https://techtutorialsx.com/2017/06/05/esp-wroom-32-uploading-a-program-with-arduino-ide/
+  thermistor parameters:
+   RT0: 30 000 Ω
+   B: 3977 K +- 0.75%
+   T0:  25 C
+   +- 5%
 
-BOARD: ESP32 Arduino --> ESP32 Dev Module
-Partition size = 16 MB
+  INFOS:
+  Librairie ESP32 Utilisé avec comme board ESP32_FireBeetle pour l'ESP Wroom
+  https://techtutorialsx.com/2017/06/05/esp-wroom-32-uploading-a-program-with-arduino-ide/
+
+  BOARD: ESP32 Arduino --> ESP32 Dev Module
+  Partition size = 16 MB
 */
 
 #include <Wire.h>
@@ -86,10 +85,13 @@ Partition size = 16 MB
 
 
 
-  /*==============================================================================
+/*==============================================================================
 **                             Local Defines                                    **
-================================================================================*/
-#define LED_PIN      25  
+  ================================================================================*/
+
+#define EMULATEUR 1
+
+#define LED_PIN      25
 #define CLOCK_PIN    32
 #define MOTEUR_PIN   18
 #define I2C_SDA_PIN  22
@@ -132,9 +134,9 @@ Partition size = 16 MB
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
- /*===============================================================================
- **                            Global Variables                                 **
- ===============================================================================*/
+/*===============================================================================
+**                            Global Variables                                 **
+  ===============================================================================*/
 
 
 
@@ -150,9 +152,13 @@ float fOutSens_V = 0;
 float fOutDiff_V = 0;
 float RT, VR, ln, TXX, Temp_0, VRT;
 
- int pwmChannel = 0; //Choisit le canal 0
- int pwmChannel_clock = 1; //Choisit le canal 0
- int resolution = 8; // Résolution de 8 bits, 256 valeurs possibles
+float value2 =0;
+
+int pwmChannel = 0; //Choisit le canal 0
+int pwmChannel_clock = 1; //Choisit le canal 0
+int resolution = 8; // Résolution de 8 bits, 256 valeurs possibles
+
+int int_ble_receive = 0;
 
 uint8_t address = 0x68;
 MCP342x adc = MCP342x(address);
@@ -167,235 +173,301 @@ uint32_t value = 0;
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
+      Serial.println("BLE DEVICE CONNECTED    OK ");
       deviceConnected = true;
     };
- 
+
     void onDisconnect(BLEServer* pServer) {
+      Serial.println("BLE DEVICE DISCONNECTED   KO ");
       deviceConnected = false;
     }
 };
 
- 
 
 
- /*===============================================================================
- **                            SETUP()                                          **
- ===============================================================================*/
+class MyCallbacks: public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+      std::string rxValue = pCharacteristic->getValue();
+
+      if (rxValue.length() > 0) {
+        Serial.println("*********");
+        Serial.print("Received BLE: ");
+
+        for (int i = 0; i < rxValue.length(); i++) {
+          Serial.print(rxValue[i]);
+        }
+
+        Serial.println();
+
+        // Do stuff based on the command received from the app
+        if (rxValue.find("1") != -1) {
+          int_ble_receive = 1;
+        }
+        else if (rxValue.find("0") != -1) {
+          int_ble_receive = 2;
+
+        }
+
+        Serial.println();
+        Serial.println("*********");
+      }
+    }
+};
+
+
+
+/*===============================================================================
+**                            SETUP()                                          **
+  ===============================================================================*/
 
 void setup() {
-/*
-  //********* Hello woorld de test ********
-// Set LED as output
-    pinMode(LED, OUTPUT);
+  /*
+    //********* Hello woorld de test ********
+    // Set LED as output
+      pinMode(LED, OUTPUT);
 
-     */
+  */
   Temp_0 = 25 + 273.15;
 
-  Setup_PWM();
-  Setup_ADC();
-  Setup_I2C();
+  if (EMULATEUR == 0)
+  {
+    Setup_PWM();
+    Setup_ADC();
+    Setup_I2C();
+  }
+
   Setup_SERIAL();
-//________________________BLE______________________
-    // Create the BLE Device
-  BLEDevice::init("ESP32-BLE_NGL-Proto");
- 
+  //________________________BLE______________________
+  // Create the BLE Device
+  BLEDevice::init("NGL Sensors");
+
   // Create the BLE Server
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
- 
+
   // Create the BLE Service
   BLEService *pService = pServer->createService(SERVICE_UUID);
- 
+
   // Create a BLE Characteristic
   pCharacteristic = pService->createCharacteristic(
                       CHARACTERISTIC_UUID_TX,
-                      BLECharacteristic::PROPERTY_NOTIFY                    
+                      BLECharacteristic::PROPERTY_NOTIFY
                     );
- 
+
   // https://www.bluetooth.com/specifications/gatt/viewer?attributeXmlFile=org.bluetooth.descriptor.gatt.client_characteristic_configuration.xml
   // Create a BLE Descriptor
   pCharacteristic->addDescriptor(new BLE2902());
- 
+
+  BLECharacteristic * pRxCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID_RX,
+      BLECharacteristic::PROPERTY_WRITE
+                                          );
+
+  pRxCharacteristic->setCallbacks(new MyCallbacks());
+
   // Start the service
   pService->start();
-  
+
   // Start advertising
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  
+
   pAdvertising->addServiceUUID(SERVICE_UUID);
-  
+
   pAdvertising->setScanResponse(false);
   pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
   BLEDevice::startAdvertising();
 
   Serial.println("Waiting a client connection to notify...");
 
-
-
 }
 
- /*===============================================================================
- **                            LOOP()                                          **
- ===============================================================================*/
- 
+/*===============================================================================
+**                            LOOP()                                          **
+  ===============================================================================*/
+
 void loop() {
-//SerialBT.println("Bouillon en cours de mesure........");
-/*
-   //********* Hello woorld de test ********
-    Serial.print("Hello");
-    digitalWrite(LED, HIGH);
-    
-    delay(100);
-    
-    Serial.println(" world!");
-    digitalWrite(LED, LOW);
-    
-    delay(100);
-*/ 
- 
+  if (EMULATEUR == 0)
+  {
+    // ********* DIMMING LED *********
+    for (int dutyCycle = 0; dutyCycle <= 169; dutyCycle++) {
 
-
-         // ********* DIMMING LED *********
-    for(int dutyCycle = 0; dutyCycle <= 169; dutyCycle++){
-      
-        ledcWrite(pwmChannel, dutyCycle);
-        //ledcWrite(pwmChannel, dutyCycle);//1.65 V
-        delay(DELAY_PWM);
-                                                         }
+      ledcWrite(pwmChannel, dutyCycle);
+      //ledcWrite(pwmChannel, dutyCycle);//1.65 V
+      delay(DELAY_PWM);
+    }
     // ********* CLOCK *********
-             ledcWrite(pwmChannel_clock, 127); //1.65 V de temps haut --> clock  
+    ledcWrite(pwmChannel_clock, 127); //1.65 V de temps haut --> clock
 
 
-/*
-       // ********* READING ADC *********
-          // Tension batterie
-        OutBatValue = analogRead(Out_Bat_PIN);
-        OutBatVolt  = OutBatValue*(3.3/4096)/0.77; //Conversion en volt des 12 Bits
-        Serial.print("Out_Bat = ");
-        Serial.print(OutBatVolt);
-        Serial.println(" V ");
-        delay(250);
-*/
-          // ********* NTC *********
-        VRT = analogRead(OUT_NTC_PIN );
-        VRT = (3.30 / 4096.00) * VRT;      //Conversion to voltage
-        Serial.print("Out_NTC = ");
-        Serial.print(VRT);
-        Serial.print(" V ");
-        Serial.print(" \t ");
-        
-        VR = VCC - VRT;
-        RT = VRT / (VR / R);               //Resistance of RT
+    // ********* READING ADC *********
+    // Tension batterie
+    OutBatValue = analogRead(OUT_BAT_PIN);
+    OutBatValue = analogRead(OUT_BAT_PIN);
+    OutBatValue = analogRead(OUT_BAT_PIN);
+    OutBatVolt  = OutBatValue * (3.3 / 4096) / 0.77; //Conversion en volt des 12 Bits
+    //Serial.print("Out_Bat = ");
+    Serial.print(OutBatVolt);
+    Serial.print(",");
+    //delay(250);
 
-        ln = log(RT / RT0);
-        TXX = (1 / ((ln / B) + (1 / Temp_0))); //Temperature from thermistor
- 
-        TXX = TXX - 273.15;                 //Conversion to Celsius
- 
-        Serial.print("Temp = ");
-        Serial.print(TXX);
-        Serial.print(" °C ");
-        Serial.print(" \t ");
-        //BT
-        //SerialBT.print("Temp = ");
-        // SerialBT.print(TXX);
-        // SerialBT.print(" °C ");
-        // SerialBT.print(" \t ");
+    // ********* NTC *********
+    //Mesure ADC NTC
+    VRT = analogRead(OUT_NTC_PIN);
+    VRT = analogRead(OUT_NTC_PIN);
+    VRT = analogRead(OUT_NTC_PIN);
 
-       
-        delay(250);
-        
-       // ********* I²C *********  
+    //MESURE TENSION NTC
+    //VRT = (3.30 / 4096.00) * VRT;      //Conversion to voltage
+    //  Serial.print("Out_NTC = ");
+    //  Serial.print(VRT);
+    //  Serial.print(" V ");
+    //  Serial.print(" \t ");
+    //#define RT0 30000   // Ω
+    //#define B 3977      // K
+    //#define VCC 3.28    //Supply voltage
+    //#define R 10000  //R=10KΩ
 
-//***** Channel 1
-  long value = 0;  // Essai en int  16 Signed: int16_t
-   //int16_t value = 0;
- 
-  MCP342x::Config status;
-  // Initiate a conversion; convertAndRead() will wait until it can be read
-  uint8_t err = adc.convertAndRead(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, value, status);
-  if (err) {
-    Serial.print("Convert error: ");
-    Serial.println(err);
-  }
-  else {
-    Serial.print("Out_SENS_16Bits_signed: ");
-    Serial.print(value);
-    Serial.print(" \t ");
-  }
-  
- 
+    VR = VCC - VRT;
+    RT = VRT / (VR / R);               //Resistance of RT
 
-  //***** Channel 2
+    ln = log(RT / RT0);
+    TXX = (1 / ((ln / B) + (1 / Temp_0))); //Temperature from thermistor
 
-   long valueDiff = 0;
-   // Essai en int  16 Signed: int16_t
-   //int16_t valueDiff = 0;
-//  MCP342x::Config status;
-  // Initiate a conversion; convertAndRead() will wait until it can be read
-  uint8_t err2 = adc.convertAndRead(MCP342x::channel2, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, valueDiff, status);
-  if (err) {
-    Serial.print("Convert error: ");
-    Serial.println(err);
-  }
-  else {
-    Serial.print("Out_DIFF_16Bits_signed: ");
-    Serial.print(valueDiff);
-    Serial.print(" \t ");
-  }
-  
- 
+    TXX = TXX - 273.15;                 //Conversion to Celsius
 
-// 32 767 est le max puisqu'il y a un bit de signe
-// Donc sur 15 Bits puisqu'on est en single ended
-
- // ********* Conversion en Volt ********* 
-
-    fOutSens_V = (VREF_ADC/32767 )* value; // Attention vref = 2.048 V
-    Serial.print("OUT_SENS = ");
-    Serial.print(fOutSens_V);
-    Serial.print(" V ");
-    Serial.print(" \t ");
+    //  Serial.print("Temp = ");
+    Serial.print(VRT);
+    Serial.print(",");
+    Serial.print(TXX);
+    Serial.print(",");
+    //  Serial.print(" °C ");
+    //  Serial.print(" \t ");
     //BT
-   // SerialBT.print("OUT_SENS = ");
-   // SerialBT.print(fOutSens_V);
-   // SerialBT.println(" V "); //last BT
-              
-  
-    fOutDiff_V = (VREF_ADC/32767 )* valueDiff;
-    Serial.print("OUT_DIFF = ");
-    Serial.print(fOutDiff_V);
-    Serial.println(" V "); //last Serial
+    //SerialBT.print("Temp = ");
+    // SerialBT.print(TXX);
+    // SerialBT.print(" °C ");
+    // SerialBT.print(" \t ");
 
-// // ********* BT ********* 
-//   if (Serial.available()) {
-//     SerialBT.write(Serial.read());
-//   }
-//   if (SerialBT.available()) {
-//     Serial.write(SerialBT.read());
-//   }
-//   delay(20);
-//------------------ BLE -------------------------
+    delay(250);
+
+    // ********* I²C *********
+    //***** Channel 1
+    // OUT_SENS sortie chaine normale
+    long value = 0;  // Essai en int  16 Signed: int16_t
+    //int16_t value = 0;
+
+    MCP342x::Config status;
+    // Initiate a conversion; convertAndRead() will wait until it can be read
+    uint8_t err = adc.convertAndRead(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, value, status);
+    if (err) {
+      Serial.print("ADC16bit OUT_SENS error: ");
+      Serial.println(err);
+    }
+    else {
+      //Serial.print("Out_SENS_16Bits_signed: ");
+      Serial.print(value);
+      Serial.print(",");
+      //Serial.print(" \t ");
+    }
+
+
+
+    //***** Channel 2
+    //OUT_DIFF sortie ampli différentiel
+    long valueDiff = 0;
+    // Essai en int  16 Signed: int16_t
+    //int16_t valueDiff = 0;
+    //  MCP342x::Config status;
+    // Initiate a conversion; convertAndRead() will wait until it can be read
+    uint8_t err2 = adc.convertAndRead(MCP342x::channel2, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, valueDiff, status);
+    if (err) {
+      Serial.print("ADC16bit OUT_DIFF error: ");
+      Serial.println(err);
+    }
+    else {
+      //Serial.print("Out_DIFF_16Bits_signed: ");
+      Serial.print(valueDiff);
+      Serial.print(",");
+      //Serial.print(" \t ");
+    }
+
+
+
+    // 32 767 est le max puisqu'il y a un bit de signe
+    // Donc sur 15 Bits puisqu'on est en single ended
+
+    // ********* Conversion en Volt *********
+
+    fOutSens_V = (VREF_ADC / 32767 ) * value; // Attention vref = 2.048 V
+    //Serial.print("OUT_SENS = ");
+    Serial.println(fOutSens_V);
+    //Serial.print(",");
+    //Serial.print(" V ");
+    //Serial.print(" \t ");
+    //BT
+    // SerialBT.print("OUT_SENS = ");
+    // SerialBT.print(fOutSens_V);
+    // SerialBT.println(" V "); //last BT
+
+    //  fOutDiff_V = (VREF_ADC / 32767 ) * valueDiff;
+    //  Serial.print("OUT_DIFF = ");
+    //  Serial.print(fOutDiff_V);
+    //  Serial.println(" V "); //last Serial
+
+  }
+  else
+  {
+    delay(200);
+    //EMULATION
+    //16bits
+    value2=value2+64;
+    if (value2 >= 65536) value2 = 0;
+
+    //12bits
+    VRT=VRT+4;
+    if (VRT >= 4096) VRT = 0;
+
+    Serial.print(value2);
+    Serial.print(",");
+    Serial.print(VRT);
+    Serial.print(",");
+  }
+
+  // // ********* BT *********
+  //   if (Serial.available()) {
+  //     SerialBT.write(Serial.read());
+  //   }
+  //   if (SerialBT.available()) {
+  //     Serial.write(SerialBT.read());
+  //   }
+  //   delay(20);
+  //------------------ BLE -------------------------
   if (deviceConnected) {
-  // // Transformation en chaine de carac
-  //       char txString[8];
-  //       dtostrf(value, 1, 2, txString);
-  //       // char txStringTEMP[8];
-  //       // dtostrf(VRT, 1, 2, txString);
+    // // Transformation en chaine de carac
+    //       char txString[8];
+    //       dtostrf(value, 1, 2, txString);
+    //       // char txStringTEMP[8];
+    //       // dtostrf(VRT, 1, 2, txString);
 
-  //       pCharacteristic->setValue(txString); // SEND
-  //       // pCharacteristic_TEMP->setValue(txString); // SEND
+    //       pCharacteristic->setValue(txString); // SEND
+    //       // pCharacteristic_TEMP->setValue(txString); // SEND
 
-  //       pCharacteristic->notify();
-  //       // pCharacteristic_TEMP->notify();
-  //       //Serial.println(value);
-        
-  //       delay(DELAY_SEND_BLE); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
+    //       pCharacteristic->notify();
+    //       // pCharacteristic_TEMP->notify();
+    //       //Serial.println(value);
 
-  // Let's convert the value to a char array:
+    //       delay(DELAY_SEND_BLE); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
+
+    // Let's convert the value to a char array:
     char txString[16]; // make sure this is big enuffz
-    dtostrf(value, 7, 2, txString); // float_val, min_width, digits_after_decimal, char_buffer
-
+    if (EMULATEUR == 0)
+    {
+      dtostrf(value, 7, 0, txString); // float_val, min_width, digits_after_decimal, char_buffer
+    }
+    else
+    {
+      dtostrf(value2, 7, 0, txString); // float_val, min_width, digits_after_decimal, char_buffer
+    }
     char txString2[10]; // make sure this is big enuffz
     dtostrf(VRT, 5, 1, txString2); // float_val, min_width, digits_after_decimal, char_buffer
 
@@ -426,23 +498,39 @@ void loop() {
     pCharacteristic->notify();
     //if (int_type_measure == 1) txValue = 12 + random(0, 5);
     //if (int_type_measure == 2) txValue = 150 + random(0, 50);
+
+    Serial.print("txstring : ");
+    Serial.println(txString);
+
+  }
+  else
+
+  {
+    if (EMULATEUR == 1)
+    {
+      Serial.println();
     }
-    // disconnecting
-    if (!deviceConnected && oldDeviceConnected) {
-        // delay(500); // give the bluetooth stack the chance to get things ready
-        // pServer->startAdvertising(); // restart advertising
-        // Serial.println("start advertising");
-        // oldDeviceConnected = deviceConnected;
-    }
-    // connecting
-    if (deviceConnected && !oldDeviceConnected) {
-        // do stuff here on connecting
-        oldDeviceConnected = deviceConnected;
-    }
-   
-    delay(DELAY_LOOP) ;
-    // Voir pour plus de chiffre sur le float
-    
-   
-}       
-         
+  }
+
+
+  // disconnecting
+  if (!deviceConnected && oldDeviceConnected) {
+    delay(500); // give the bluetooth stack the chance to get things ready
+    pServer->startAdvertising(); // restart advertising
+    Serial.println("start advertising");
+    oldDeviceConnected = deviceConnected;
+  }
+
+
+  // connecting
+  if (deviceConnected && !oldDeviceConnected) {
+    // do stuff here on connecting
+    oldDeviceConnected = deviceConnected;
+    Serial.println("Device connected ;-)");
+  }
+
+  //delay(DELAY_LOOP) ;
+  // Voir pour plus de chiffre sur le float
+
+
+}

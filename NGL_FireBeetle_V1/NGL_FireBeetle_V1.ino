@@ -34,15 +34,15 @@
 
   ------ OTHERS ------
 
-  LED BLUE  --> IO25
+  LED BLUE      --> IO25
 
-  CLOCK_GEN --> IO32
+  CLOCK_GEN     --> IO32
 
-  INH       --> IO23
+  INH (EN_LDO)  --> IO23
 
-  NEO       --> IO26
+  NEO           --> IO26
 
-  MOTEUR    --> IO18
+  MOTEUR        --> IO18
 
 
   Flash par UART !
@@ -84,12 +84,11 @@
 
 
 
-
 /*==============================================================================
 **                             Local Defines                                    **
   ================================================================================*/
 
-#define EMULATEUR 1
+#define EMULATEUR 0
 
 #define LED_PIN      25
 #define CLOCK_PIN    32
@@ -98,6 +97,7 @@
 #define I2C_SCL_PIN  21
 #define OUT_BAT_PIN  39
 #define OUT_NTC_PIN  36
+#define INH_EN_LDO   23
 
 #define DELAY_PWM         10
 #define DELAY_LOOP        420
@@ -152,7 +152,8 @@ float fOutSens_V = 0;
 float fOutDiff_V = 0;
 float RT, VR, ln, TXX, Temp_0, VRT;
 
-float value2 =0;
+float value2 = 0;
+float value3_vib_cond = 0;
 
 int pwmChannel = 0; //Choisit le canal 0
 int pwmChannel_clock = 1; //Choisit le canal 0
@@ -169,7 +170,8 @@ BLEServer* pServer = NULL;
 BLECharacteristic* pCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
-uint32_t value = 0;
+//uint32_t value = 0;
+long value = 0;
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -231,6 +233,7 @@ void setup() {
 
   if (EMULATEUR == 0)
   {
+    Setup_IO(); //enable power
     Setup_PWM();
     Setup_ADC();
     Setup_I2C();
@@ -300,18 +303,22 @@ void loop() {
 
 
     // ********* READING ADC *********
-    // Tension batterie
+    // Tension batterie ADC esp32
     OutBatValue = analogRead(OUT_BAT_PIN);
     OutBatValue = analogRead(OUT_BAT_PIN);
     OutBatValue = analogRead(OUT_BAT_PIN);
-    OutBatVolt  = OutBatValue * (3.3 / 4096) / 0.77; //Conversion en volt des 12 Bits
+    //ADC
+        Serial.print(OutBatVolt);
+    Serial.print(",");
+    OutBatVolt  = OutBatValue * (3.3 / 4096) / 0.66; //Conversion en volt des 12 Bits
     //Serial.print("Out_Bat = ");
+    //TENSION BAT 0.66*tension pile
     Serial.print(OutBatVolt);
     Serial.print(",");
     //delay(250);
 
     // ********* NTC *********
-    //Mesure ADC NTC
+    //Mesure ADC NTC  ADC ESP32
     VRT = analogRead(OUT_NTC_PIN);
     VRT = analogRead(OUT_NTC_PIN);
     VRT = analogRead(OUT_NTC_PIN);
@@ -328,7 +335,11 @@ void loop() {
     //#define R 10000  //R=10KΩ
 
     VR = VCC - VRT;
-    RT = VRT / (VR / R);               //Resistance of RT
+    //RT = VRT / (VR / R);               //Resistance of RT
+
+    //Rntc=Rpont*Vin/Vout-Rpont
+    //RT = (VRT-VR)*10000/VR;               //Resistance of RT
+    RT = (10000 * VCC / VR) - 10000;
 
     ln = log(RT / RT0);
     TXX = (1 / ((ln / B) + (1 / Temp_0))); //Temperature from thermistor
@@ -348,17 +359,18 @@ void loop() {
     // SerialBT.print(" °C ");
     // SerialBT.print(" \t ");
 
-    delay(250);
+    //delay(250);
 
     // ********* I²C *********
     //***** Channel 1
     // OUT_SENS sortie chaine normale
-    long value = 0;  // Essai en int  16 Signed: int16_t
+    //long value = 0;  // Essai en int  16 Signed: int16_t
     //int16_t value = 0;
 
     MCP342x::Config status;
     // Initiate a conversion; convertAndRead() will wait until it can be read
     uint8_t err = adc.convertAndRead(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, value, status);
+    value3_vib_cond = value;
     if (err) {
       Serial.print("ADC16bit OUT_SENS error: ");
       Serial.println(err);
@@ -366,6 +378,8 @@ void loop() {
     else {
       //Serial.print("Out_SENS_16Bits_signed: ");
       Serial.print(value);
+      Serial.print(",");
+      Serial.print(value3_vib_cond);
       Serial.print(",");
       //Serial.print(" \t ");
     }
@@ -420,11 +434,11 @@ void loop() {
     delay(200);
     //EMULATION
     //16bits
-    value2=value2+64;
+    value2 = value2 + 64;
     if (value2 >= 65536) value2 = 0;
 
     //12bits
-    VRT=VRT+4;
+    VRT = VRT + 4;
     if (VRT >= 4096) VRT = 0;
 
     Serial.print(value2);
@@ -462,7 +476,7 @@ void loop() {
     char txString[16]; // make sure this is big enuffz
     if (EMULATEUR == 0)
     {
-      dtostrf(value, 7, 0, txString); // float_val, min_width, digits_after_decimal, char_buffer
+      dtostrf(value3_vib_cond, 7, 0, txString); // float_val, min_width, digits_after_decimal, char_buffer
     }
     else
     {

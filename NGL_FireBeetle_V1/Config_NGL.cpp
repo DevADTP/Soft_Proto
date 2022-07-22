@@ -1,4 +1,3 @@
-
 #include "Config_NGL.h"
 #include "Arduino.h"
 #include "BluetoothSerial.h"
@@ -13,6 +12,7 @@
 #define I2C_SCL_PIN  21
 #define OUT_BAT_PIN  39
 #define OUT_NTC_PIN  36
+#define INH_EN_LDO   23
 
 #define DELAY_PWM    10
 
@@ -65,14 +65,22 @@ void Setup_PWM(void)
     ledcWrite(pwmChannel_clock, BRIGHTNESS_LED); //1.65 V
 }
 
+void Setup_IO(void)
+{
+  //enable LDO
+  pinMode(INH_EN_LDO,INPUT);
+
+  //power ON
+  //digitalWrite(INH_EN_LDO, HIGH);
+}
+
 void Setup_ADC(void)
 {
   
     //----------- ADC ----------- 
     pinMode(OUT_BAT_PIN,INPUT); //3.8 V pour l'instant sur out BAT donc ne pas déclarer
     pinMode(OUT_NTC_PIN,INPUT);
-
-        //pinMode(MOTEUR , OUTPUT);    // sets the digital pin 13 as output
+    //pinMode(MOTEUR , OUTPUT);    // sets the digital pin 13 as output
 }
 
 void Setup_I2C(void)
@@ -93,5 +101,5 @@ void Setup_SERIAL(void)
   
  // SerialBT.begin("NGL_PROTO_ESP32"); //Bluetooth device name
    
-  Serial.println("The device started, now you can pair it with bluetooth!");
+  Serial.println("The device (NGL Sensors) started, now you can pair it with bluetooth!");
 }

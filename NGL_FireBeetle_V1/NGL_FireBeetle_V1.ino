@@ -134,6 +134,9 @@
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
+
+//timing
+#define WAIT_ACTIVE_ENABLE_POWER 10000
 /*===============================================================================
 **                            Global Variables                                 **
   ===============================================================================*/
@@ -151,6 +154,10 @@ float OutBatVolt = 0;
 float fOutSens_V = 0;
 float fOutDiff_V = 0;
 float RT, VR, ln, TXX, Temp_0, VRT;
+
+unsigned long ulong_time_now = 0;
+unsigned long ulong_time_enablepower_change = 0;
+int int_onetime_enable = 1;
 
 float value2 = 0;
 float value3_vib_cond = 0;
@@ -223,17 +230,21 @@ class MyCallbacks: public BLECharacteristicCallbacks {
   ===============================================================================*/
 
 void setup() {
-  /*
-    //********* Hello woorld de test ********
-    // Set LED as output
-      pinMode(LED, OUTPUT);
 
-  */
+  //enable LDO
+  pinMode(INH_EN_LDO, INPUT);
+  //important DELAY FOR BOOTING
+  delay(2000);
+
   Temp_0 = 25 + 273.15;
+
+  //led
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
   if (EMULATEUR == 0)
   {
-    Setup_IO(); //enable power
+    //Setup_IO(); //enable power
     Setup_PWM();
     Setup_ADC();
     Setup_I2C();
@@ -282,6 +293,8 @@ void setup() {
 
   Serial.println("Waiting a client connection to notify...");
 
+  ulong_time_enablepower_change = millis() + WAIT_ACTIVE_ENABLE_POWER;
+
 }
 
 /*===============================================================================
@@ -289,17 +302,33 @@ void setup() {
   ===============================================================================*/
 
 void loop() {
+
+  //period with millis()
+  ulong_time_now = millis();
+
+  if ((ulong_time_now >= ulong_time_enablepower_change))
+  {
+    ulong_time_enablepower_change = millis() + WAIT_ACTIVE_ENABLE_POWER;
+    if (int_onetime_enable == 1)
+    {
+      int_onetime_enable = 0;
+      Serial.println("ENABLE POWER activation autopower");
+      Setup_IO(); //enable power
+    }
+  }
+
+
   if (EMULATEUR == 0)
   {
-    // ********* DIMMING LED *********
-    for (int dutyCycle = 0; dutyCycle <= 169; dutyCycle++) {
-
-      ledcWrite(pwmChannel, dutyCycle);
-      //ledcWrite(pwmChannel, dutyCycle);//1.65 V
-      delay(DELAY_PWM);
-    }
-    // ********* CLOCK *********
-    ledcWrite(pwmChannel_clock, 127); //1.65 V de temps haut --> clock
+    //    // ********* DIMMING LED *********
+    //    for (int dutyCycle = 0; dutyCycle <= 169; dutyCycle++) {
+    //
+    //      ledcWrite(pwmChannel, dutyCycle);
+    //      //ledcWrite(pwmChannel, dutyCycle);//1.65 V
+    //      delay(DELAY_PWM);
+    //    }
+    //    // ********* CLOCK *********
+    //    ledcWrite(pwmChannel_clock, 127); //1.65 V de temps haut --> clock
 
 
     // ********* READING ADC *********
@@ -308,7 +337,7 @@ void loop() {
     OutBatValue = analogRead(OUT_BAT_PIN);
     OutBatValue = analogRead(OUT_BAT_PIN);
     //ADC
-        Serial.print(OutBatVolt);
+    Serial.print(OutBatVolt);
     Serial.print(",");
     OutBatVolt  = OutBatValue * (3.3 / 4096) / 0.66; //Conversion en volt des 12 Bits
     //Serial.print("Out_Bat = ");
@@ -457,6 +486,13 @@ void loop() {
   //   delay(20);
   //------------------ BLE -------------------------
   if (deviceConnected) {
+
+    //blink led
+    digitalWrite(LED_PIN, HIGH);
+    delay(10);
+    digitalWrite(LED_PIN, LOW);
+
+
     // // Transformation en chaine de carac
     //       char txString[8];
     //       dtostrf(value, 1, 2, txString);
@@ -510,12 +546,13 @@ void loop() {
     //pTxCharacteristic->setValue(&txReturnValue, 8);
     // pTxCharacteristic->setValue(&txReturnValue2, 9);
     pCharacteristic->notify();
+    delay(500);
     //if (int_type_measure == 1) txValue = 12 + random(0, 5);
     //if (int_type_measure == 2) txValue = 150 + random(0, 50);
 
     Serial.print("txstring : ");
     Serial.println(txString);
-
+    
   }
   else
 
@@ -544,7 +581,14 @@ void loop() {
   }
 
   //delay(DELAY_LOOP) ;
+  if (!deviceConnected)
+  {
+    delay(2000);
+    //blink led
+    digitalWrite(LED_PIN, HIGH);
+    delay(5);
+    digitalWrite(LED_PIN, LOW);
+  }
+  
   // Voir pour plus de chiffre sur le float
-
-
 }

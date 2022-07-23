@@ -44,14 +44,14 @@ extern int resolution; // Résolution de 8 bits, 256 valeurs possibles
 void Setup_PWM(void)
 {
    //----------- PWN LED ----------- 
-      // Configuration du canal 0 avec la fréquence et la résolution choisie
-    ledcSetup(pwmChannel, CLOCK_FREQ, resolution);
-
-    // Assigne le canal PWM au pin 25
-    ledcAttachPin(LED_PIN, pwmChannel);
-
-    // Créer la tension en sortie choisi
-    ledcWrite(pwmChannel, 127); //1.65 V
+//      // Configuration du canal 0 avec la fréquence et la résolution choisie
+//    ledcSetup(pwmChannel, CLOCK_FREQ, resolution);
+//
+//    // Assigne le canal PWM au pin 25
+//    ledcAttachPin(LED_PIN, pwmChannel);
+//
+//    // Créer la tension en sortie choisi
+//    ledcWrite(pwmChannel, 127); //1.65 V
 
     //----------- PWN Clock ----------- 
 
@@ -62,16 +62,17 @@ void Setup_PWM(void)
     ledcAttachPin(CLOCK_PIN, pwmChannel_clock);
 
     // Créer la tension en sortie choisi
-    ledcWrite(pwmChannel_clock, BRIGHTNESS_LED); //1.65 V
+    //ledcWrite(pwmChannel_clock, BRIGHTNESS_LED); //1.65 V
 }
 
 void Setup_IO(void)
 {
   //enable LDO
-  pinMode(INH_EN_LDO,INPUT);
+  pinMode(INH_EN_LDO,OUTPUT);
 
   //power ON
-  //digitalWrite(INH_EN_LDO, HIGH);
+  digitalWrite(INH_EN_LDO, HIGH);
+
 }
 
 void Setup_ADC(void)

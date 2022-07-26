@@ -101,8 +101,6 @@ void Setup_I2C(void)
 void Setup_SERIAL(void)
 {
   Serial.begin(115200);
-  
- // SerialBT.begin("NGL_PROTO_ESP32"); //Bluetooth device name
    
   Serial.println("The device (NGL Sensors) started, now you can pair it with bluetooth!");
 }

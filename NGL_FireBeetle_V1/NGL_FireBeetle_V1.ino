@@ -89,7 +89,7 @@
 /*==============================================================================
 **                             Local Defines                                    **
   ================================================================================*/
-#define EMULATEUR 0
+#define EMULATEUR 1
 
 #define LED_PIN      25
 #define CLOCK_PIN    32
@@ -150,7 +150,9 @@
 
 static const int spiClk = 500000;  // 1 MHz
 int val_pot_20k = 0;
+int val_pot_10k = 0;
 char buffer_pot[30];
+int virgCharIndex = 0;
 
 SPIClass* hspi = NULL;
 SPIClass* vspi = NULL;
@@ -197,6 +199,7 @@ bool deviceConnected = false;
 bool oldDeviceConnected = false;
 //uint32_t value = 0;
 long value = 0;
+bool boolReceive = false;
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -212,50 +215,21 @@ class MyServerCallbacks: public BLEServerCallbacks {
 
 
 String inStringBleReceive = "";
+String StringRes20k = "";
+String StringRes10k = "";
+
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
       std::string rxValue = pCharacteristic->getValue();
 
-      if (rxValue.length() > 0) {
-        Serial.println("*********");
-        Serial.print("Received BLE: ");
-
-        for (int i = 0; i < rxValue.length(); i++) {
+      if (rxValue.length() > 0)
+      {
+        boolReceive = true;
+        for (int i = 0; i < rxValue.length(); i++)
+        {
           Serial.print(rxValue[i]);
           inStringBleReceive += (char)rxValue[i];
         }
-
-        //Serial.println();
-        //Serial.print(inStringBleReceive);
-        Serial.println();
-
-        val_pot_20k = inStringBleReceive.toInt();
-        inStringBleReceive="";
-
-        // Do stuff based on the command received from the app
-        //        if (rxValue.find("1") != -1) {
-        //          int_ble_receive = 1;
-        //        }
-        //        else if (rxValue.find("0") != -1) {
-        //          int_ble_receive = 2;
-        //        }
-
-        //change 20k potentiometer
-        //val_pot_20k = val_pot_20k + 20;
-        if (val_pot_20k >= 20000)
-        {
-          val_pot_20k = 20000;
-        }
-
-        if (val_pot_20k <= 0)
-        {
-          val_pot_20k = 0;
-        }
-
-        AD5270_WriteRDAC(val_pot_20k);
-
-        Serial.println();
-        Serial.println("*********");
       }
     }
 };
@@ -285,32 +259,35 @@ void setup() {
     Setup_PWM();
     Setup_ADC();
     Setup_I2C();
+    Setup_SERIAL();
+
+    //INIT SPI
+    hspi = new SPIClass(HSPI);
+
+    //clock miso mosi ss
+    pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
+    pinMode(HSPI_SS, OUTPUT);  //HSPI SS
+
+    //alternatively route through GPIO pins
+    hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS);  //SCLK, MISO, MOSI, SS
+
+    pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
+
+    //mode 0 : CPOL=0 et CPHA=0.
+    //mode 1 : CPOL=0 et CPHA=1.
+    //mode 2 : CPOL=1 et CPHA=0.
+    //mode 3 : CPOL=1 et CPHA=1.
+
+    AD5270_WriteReg(SW_RST, 0x00);  //SOFTWARE RESET POTENTIOMETER
+    delay(10);
+
+    AD5270_WriteRDAC(val_pot_20k);
   }
-
-  Setup_SERIAL();
-
-  //INIT SPI
-  hspi = new SPIClass(HSPI);
-
-  //clock miso mosi ss
-  pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
-  pinMode(HSPI_SS, OUTPUT);  //HSPI SS
-
-  //alternatively route through GPIO pins
-  hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS);  //SCLK, MISO, MOSI, SS
-
-  pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
-
-  //mode 0 : CPOL=0 et CPHA=0.
-  //mode 1 : CPOL=0 et CPHA=1.
-  //mode 2 : CPOL=1 et CPHA=0.
-  //mode 3 : CPOL=1 et CPHA=1.
-
-  AD5270_WriteReg(SW_RST, 0x00);  //SOFTWARE RESET POTENTIOMETER
-  delay(10);
-
-  AD5270_WriteRDAC(val_pot_20k);
-
+  else
+  {
+    Serial.begin(1500000);
+    Serial.println("The device (NGL Sensors) started, now you can pair it with bluetooth!");
+  }
 
   //________________________BLE______________________
   // Create the BLE Device
@@ -374,21 +351,16 @@ void loop() {
     {
       int_onetime_enable = 0;
       Serial.println("ENABLE POWER activation autopower");
-      Setup_IO(); //enable power
+      if (EMULATEUR == 0)
+      {
+        Setup_IO(); //enable power
+      }
     }
   }
 
 
   if (EMULATEUR == 0)
   {
-    //    // ********* DIMMING LED *********
-    //    for (int dutyCycle = 0; dutyCycle <= 169; dutyCycle++) {
-    //
-    //      ledcWrite(pwmChannel, dutyCycle);
-    //      //ledcWrite(pwmChannel, dutyCycle);//1.65 V
-    //      delay(DELAY_PWM);
-    //    }
-
     // ********* CLOCK *********
     ledcWrite(pwmChannel_clock, 127); //1.65 V de temps haut --> clock
 
@@ -415,16 +387,6 @@ void loop() {
     VRT = analogRead(OUT_NTC_PIN);
 
     //MESURE TENSION NTC
-    //VRT = (3.30 / 4096.00) * VRT;      //Conversion to voltage
-    //  Serial.print("Out_NTC = ");
-    //  Serial.print(VRT);
-    //  Serial.print(" V ");
-    //  Serial.print(" \t ");
-    //#define RT0 30000   // Ω
-    //#define B 3977      // K
-    //#define VCC 3.28    //Supply voltage
-    //#define R 10000  //R=10KΩ
-
     VR = VCC - VRT;
     //RT = VRT / (VR / R);               //Resistance of RT
 
@@ -449,8 +411,6 @@ void loop() {
     // SerialBT.print(TXX);
     // SerialBT.print(" °C ");
     // SerialBT.print(" \t ");
-
-    //delay(250);
 
     // ********* I²C *********
     //***** Channel 1
@@ -506,20 +466,8 @@ void loop() {
     fOutSens_V = (VREF_ADC / 32767 ) * value; // Attention vref = 2.048 V
     //Serial.print("OUT_SENS = ");
     Serial.print(fOutSens_V);
-    //Serial.print(",");
-    //Serial.print(" V ");
-    //Serial.print(" \t ");
-    //BT
-    // SerialBT.print("OUT_SENS = ");
-    // SerialBT.print(fOutSens_V);
-    // SerialBT.println(" V "); //last BT
 
-    //  fOutDiff_V = (VREF_ADC / 32767 ) * valueDiff;
-    //  Serial.print("OUT_DIFF = ");
-    //  Serial.print(fOutDiff_V);
-    //  Serial.println(" V "); //last Serial
-
-    //potentiometre 20K
+    // ********** potentiometre 20K ***************************
     Serial.print(",");
     Serial.println(val_pot_20k);
   }
@@ -539,16 +487,11 @@ void loop() {
     Serial.print(",");
     Serial.print(VRT);
     Serial.print(",");
+    Serial.print(val_pot_20k);
+    Serial.print(",");
+    Serial.print(val_pot_10k);
   }
 
-  // // ********* BT *********
-  //   if (Serial.available()) {
-  //     SerialBT.write(Serial.read());
-  //   }
-  //   if (SerialBT.available()) {
-  //     Serial.write(SerialBT.read());
-  //   }
-  //   delay(20);
   //------------------ BLE -------------------------
   if (deviceConnected) {
 
@@ -556,22 +499,6 @@ void loop() {
     digitalWrite(LED_PIN, HIGH);
     delay(10);
     digitalWrite(LED_PIN, LOW);
-
-
-    // // Transformation en chaine de carac
-    //       char txString[8];
-    //       dtostrf(value, 1, 2, txString);
-    //       // char txStringTEMP[8];
-    //       // dtostrf(VRT, 1, 2, txString);
-
-    //       pCharacteristic->setValue(txString); // SEND
-    //       // pCharacteristic_TEMP->setValue(txString); // SEND
-
-    //       pCharacteristic->notify();
-    //       // pCharacteristic_TEMP->notify();
-    //       //Serial.println(value);
-
-    //       delay(DELAY_SEND_BLE); // bluetooth stack will go into congestion, if too many packets are sent, in 6 hours test i was able to go as low as 3ms
 
     // Let's convert the value to a char array:
     char txString[16]; // make sure this is big enuffz
@@ -606,26 +533,71 @@ void loop() {
     txString[7] = 0x2C; //tab char(13);
     txString[15] = 0x0A; //return line char(13);
 
-    //pTxCharacteristic->setValue(&txValue, 1);
     pCharacteristic->setValue(txString);
-    //pTxCharacteristic->setValue(&txReturnValue, 8);
-    // pTxCharacteristic->setValue(&txReturnValue2, 9);
+
     pCharacteristic->notify();
     delay(500);
-    //if (int_type_measure == 1) txValue = 12 + random(0, 5);
-    //if (int_type_measure == 2) txValue = 150 + random(0, 50);
-
-    Serial.print("txstring : ");
+    
+    Serial.print(",");
     Serial.println(txString);
 
+    //---------- BLE RECEIVE ---------------------------
+    if (boolReceive == true)
+    {
+      boolReceive = false;
+
+      Serial.println("----------------------------------");
+      Serial.print("Received BLE: ");
+      Serial.println(inStringBleReceive);
+
+      virgCharIndex = inStringBleReceive.indexOf(',');
+
+
+      if (virgCharIndex != -1)
+      {
+        //format 20k potentiometer
+        StringRes20k = inStringBleReceive.substring(0, virgCharIndex);
+        Serial.print("20k: ");
+        Serial.println(StringRes20k);
+
+        StringRes10k = inStringBleReceive.substring((virgCharIndex+1), inStringBleReceive.length());
+        Serial.print("10k: ");
+        Serial.println(StringRes10k);
+
+        val_pot_20k = StringRes20k.toInt();
+        //controle 20k potentiometer
+        if (val_pot_20k >= 20000) val_pot_20k = 20000;
+        if (val_pot_20k <= 0)     val_pot_20k = 0;
+
+        val_pot_10k = StringRes10k.toInt();
+        //controle 10k potentiometer
+        if (val_pot_10k >= 10000) val_pot_10k = 10000;
+        if (val_pot_10k <= 0)     val_pot_10k = 0;
+
+        inStringBleReceive = "";
+        StringRes20k = "";
+        StringRes10k = "";
+
+        if (EMULATEUR == 0)
+        {
+          //change potentimeter 20k
+          AD5270_WriteRDAC(val_pot_20k);
+        }
+      }
+      else
+      {
+        //no virgule bad format
+        Serial.println("no change potentiometer");
+      }
+
+      Serial.println("----------------------------------");
+
+    }
   }
   else
 
   {
-    if (EMULATEUR == 1)
-    {
       Serial.println();
-    }
   }
 
 

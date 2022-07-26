@@ -49,9 +49,12 @@ void Setup_PWM(void)
 //
 //    // Assigne le canal PWM au pin 25
 //    ledcAttachPin(LED_PIN, pwmChannel);
+
+//    // Créer la tension en sortie choisi
+//    ledcWrite(pwmChannel_clock, BRIGHTNESS_LED); //1.65 V
 //
 //    // Créer la tension en sortie choisi
-//    ledcWrite(pwmChannel, 127); //1.65 V
+
 
     //----------- PWN Clock ----------- 
 
@@ -61,8 +64,7 @@ void Setup_PWM(void)
     // Assigne le canal PWM au 
     ledcAttachPin(CLOCK_PIN, pwmChannel_clock);
 
-    // Créer la tension en sortie choisi
-    //ledcWrite(pwmChannel_clock, BRIGHTNESS_LED); //1.65 V
+    ledcWrite(pwmChannel, 127); //1.65 V
 }
 
 void Setup_IO(void)

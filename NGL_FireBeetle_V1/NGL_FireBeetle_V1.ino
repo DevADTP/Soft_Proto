@@ -327,8 +327,9 @@ void loop() {
     //      //ledcWrite(pwmChannel, dutyCycle);//1.65 V
     //      delay(DELAY_PWM);
     //    }
-    //    // ********* CLOCK *********
-    //    ledcWrite(pwmChannel_clock, 127); //1.65 V de temps haut --> clock
+    
+    // ********* CLOCK *********
+    ledcWrite(pwmChannel_clock, 127); //1.65 V de temps haut --> clock
 
 
     // ********* READING ADC *********
@@ -552,7 +553,7 @@ void loop() {
 
     Serial.print("txstring : ");
     Serial.println(txString);
-    
+
   }
   else
 
@@ -589,6 +590,6 @@ void loop() {
     delay(5);
     digitalWrite(LED_PIN, LOW);
   }
-  
+
   // Voir pour plus de chiffre sur le float
 }

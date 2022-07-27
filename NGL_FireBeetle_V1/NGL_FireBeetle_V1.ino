@@ -146,7 +146,8 @@
 #define HSPI_MISO 12
 #define HSPI_MOSI 13
 #define HSPI_SCLK 14
-#define HSPI_SS 16
+#define HSPI_SS_AD5270_20K 16
+#define HSPI_SS_MAX5481_10K 17
 
 static const int spiClk = 500000;  // 1 MHz
 int val_pot_20k = 0;
@@ -254,14 +255,14 @@ void setup() {
   digitalWrite(LED_PIN, LOW);
 
   //blink 20 fois rapide au demarrage
-  for (int kk=0;kk<20;kk++)
+  for (int kk = 0; kk < 20; kk++)
   {
     digitalWrite(LED_PIN, HIGH);
     delay(10);
     digitalWrite(LED_PIN, LOW);
     delay(40);
   }
-  
+
   if (EMULATEUR == 0)
   {
     //Setup_IO(); //enable power
@@ -275,10 +276,10 @@ void setup() {
 
     //clock miso mosi ss
     pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
-    pinMode(HSPI_SS, OUTPUT);  //HSPI SS
+    pinMode(HSPI_SS_AD5270_20K, OUTPUT);  //HSPI SS
 
     //alternatively route through GPIO pins
-    hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS);  //SCLK, MISO, MOSI, SS
+    hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_AD5270_20K);  //SCLK, MISO, MOSI, SS
 
     pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
 
@@ -478,7 +479,11 @@ void loop() {
 
     // ********** potentiometre 20K ***************************
     Serial.print(",");
-    Serial.println(val_pot_20k);
+    Serial.print(val_pot_20k);
+
+    // ********** potentiometre 10K ***************************
+    Serial.print(",");
+    Serial.print(val_pot_10k);
   }
   else
   {
@@ -546,7 +551,7 @@ void loop() {
 
     pCharacteristic->notify();
     delay(500);
-    
+
     Serial.print(",");
     Serial.println(txString);
 
@@ -569,7 +574,7 @@ void loop() {
         Serial.print("20k: ");
         Serial.println(StringRes20k);
 
-        StringRes10k = inStringBleReceive.substring((virgCharIndex+1), inStringBleReceive.length());
+        StringRes10k = inStringBleReceive.substring((virgCharIndex + 1), inStringBleReceive.length());
         Serial.print("10k: ");
         Serial.println(StringRes10k);
 
@@ -589,8 +594,17 @@ void loop() {
 
         if (EMULATEUR == 0)
         {
-          //change potentimeter 20k
+          //change AD5270 potentimeter 20k
+          //alternatively route through GPIO pins
+          hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_AD5270_20K);  //SCLK, MISO, MOSI, SS
+          pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
           AD5270_WriteRDAC(val_pot_20k);
+
+          //change AD5270 potentimeter 20k
+          hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_MAX5481_10K);  //SCLK, MISO, MOSI, SS
+          pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
+          val_pot_10k=WriteMax5481Pot(val_pot_10k, 0); // HSPI ok à l'ocillo
+
         }
       }
       else
@@ -606,7 +620,7 @@ void loop() {
   else
 
   {
-      Serial.println();
+    Serial.println();
   }
 
 
@@ -725,21 +739,21 @@ float AD5270_ReadRDAC(void) {
   uint16_t result2 = 0;
 
   hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE1));
-  digitalWrite(HSPI_SS, LOW);
+  digitalWrite(HSPI_SS_AD5270_20K, LOW);
 
   hspi->transfer(READ_CTRL_REG);
   result = hspi->transfer(0xAA);
 
-  digitalWrite(HSPI_SS, HIGH);
+  digitalWrite(HSPI_SS_AD5270_20K, HIGH);
   hspi->endTransaction();
 
   hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE1));
-  digitalWrite(HSPI_SS, LOW);
+  digitalWrite(HSPI_SS_AD5270_20K, LOW);
 
   hspi->transfer(READ_CTRL_REG);
   result2 = hspi->transfer(0xAA);
 
-  digitalWrite(HSPI_SS, HIGH);
+  digitalWrite(HSPI_SS_AD5270_20K, HIGH);
   hspi->endTransaction();
 
   RDAC_val = (result2 << 8) | result;
@@ -783,23 +797,23 @@ uint16_t AD5270_ReadReg(uint8_t command) {
   data[0] = (command & 0x3C);
 
   hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE1));
-  digitalWrite(HSPI_SS, LOW);
+  digitalWrite(HSPI_SS_AD5270_20K, LOW);
 
   hspi->transfer(data[0]);
   result = hspi->transfer(0x00);
 
-  digitalWrite(HSPI_SS, HIGH);
+  digitalWrite(HSPI_SS_AD5270_20K, HIGH);
   hspi->endTransaction();
 
   delayMicroseconds(10);
 
   hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE1));
-  digitalWrite(HSPI_SS, LOW);
+  digitalWrite(HSPI_SS_AD5270_20K, LOW);
 
   hspi->transfer(data[0]);
   result2 = hspi->transfer(0x00);
 
-  digitalWrite(HSPI_SS, HIGH);
+  digitalWrite(HSPI_SS_AD5270_20K, HIGH);
   hspi->endTransaction();
 
   result = (result2 << 8) | result;
@@ -855,14 +869,14 @@ void AD5270_WriteReg(uint8_t command, uint16_t value) {
   //SPI_Write(data,2, AD5270);
 
   hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE1));
-  digitalWrite(HSPI_SS, LOW);
+  digitalWrite(HSPI_SS_AD5270_20K, LOW);
 
 
   //hspi->transfer((byte)((stuff & 0x00FF0000)>>16));
   hspi->transfer((byte)command);
   hspi->transfer((byte)data[1]);
 
-  digitalWrite(HSPI_SS, HIGH);
+  digitalWrite(HSPI_SS_AD5270_20K, HIGH);
   hspi->endTransaction();
 }
 
@@ -915,4 +929,79 @@ void AD5270_ResetRDAC(void) {
 void AD5270_ChangeMode(AD5270Modes_t mode) {
 
   AD5270_WriteReg(SW_SHUTDOWN, (uint16_t)(mode));
+}
+
+
+
+
+//fonctions potentiometer MAX5481
+int WriteMax5481Pot(long int stuff, int int_save_eeprom)
+{
+  int matStepPotMax5481[32] = {0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800, 832, 864, 896, 928, 960, 992};
+  int matValPotMax5481[32] = {939, 1253, 1564, 1883, 2200, 2510, 2830, 3140, 3460, 3770, 4080, 4400, 4720, 5030, 5340, 5660, 5970, 6290, 6600, 6920, 7230, 7550, 7850, 8170, 8490, 8810, 9110, 9430, 9750, 10060, 10360, 10690};
+
+  long int cloneStuff = stuff;
+  int minEcart = 65000;
+  int Ecart = 0;
+  int indicePot = 0;
+
+Serial.println("--------- CONFIG POT 10K MAX5481 -------");
+    Serial.print("STUFF:");
+    Serial.println(stuff);
+    
+  indicePot = 0;
+  for (int jj = 0; jj < 32; jj++)
+  {
+    Ecart = matValPotMax5481[jj] - stuff;
+    if (Ecart < 0) Ecart = -Ecart;
+
+    if (Ecart < minEcart)
+    {
+      minEcart = Ecart;
+      indicePot = jj;
+    }
+
+    Serial.print("ind:");
+    Serial.print(indicePot);
+    Serial.print("-Ecart:");
+    Serial.print(Ecart);
+        Serial.print("-EcartMin:");
+    Serial.print(minEcart);
+    Serial.print("-MAT_POT:");
+    Serial.println(matValPotMax5481[jj]);
+  }
+
+  stuff = matStepPotMax5481[indicePot];
+
+    Serial.print("STUFF final:");
+    Serial.println(stuff);
+    
+  stuff = stuff << 6;
+
+  hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE0));
+  digitalWrite(HSPI_SS_MAX5481_10K, LOW);
+
+  hspi->transfer(0x00);
+  hspi->transfer((byte)((stuff & 0x0000FF00) >> 8));
+  hspi->transfer((byte)(stuff & 0x000000FF));  //ENVOIE Message : au lieu de transferer on va DPOT !
+
+  digitalWrite(HSPI_SS_MAX5481_10K, HIGH);
+  hspi->endTransaction();
+
+  delay(10);
+
+  if (int_save_eeprom == 1)
+  {
+    hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE0));
+    digitalWrite(HSPI_SS_MAX5481_10K, LOW);
+
+    hspi->transfer(0x20);  //ENVOIE Message : au lieu de transferer on va DPOT !
+
+    digitalWrite(HSPI_SS_MAX5481_10K, HIGH);
+    hspi->endTransaction();
+
+    delay(13);
+  }
+
+  return matValPotMax5481[indicePot];
 }

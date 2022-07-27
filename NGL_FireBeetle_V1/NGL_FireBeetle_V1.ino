@@ -1,8 +1,9 @@
-
 /*============================== (c) 2022 ADTP ================================
 ** File Name   :  NGL_FireBeetle_V1                                          **
 ** Author      :  Benoit                                                     **
 ** Created on  :  Jui 1, 2022                                                **
+** Modified    :  Sully
+** Last        :  Jui 27, 2022
 **---------------------------------------------------------------------------**
 ** Description : Controls the NGL_Proto_ST PCB                               **
                   with ESP32 WROOM-32D-N16                                   *
@@ -33,21 +34,15 @@
   OUT_BAT   --> IO39 --> SENSOR_VN
 
   ------ OTHERS ------
-
   LED BLUE      --> IO25
-
   CLOCK_GEN     --> IO32
-
   INH (EN_LDO)  --> IO23
-
   NEO           --> IO26
-
   MOTEUR        --> IO18
 
 
   Flash par UART !
   ESP32 uniquement en 3.3 V !
-
 
   Hardware:
   Pont div sur VBAT: VS/VIN = 0.77
@@ -62,6 +57,14 @@
    T0:  25 C
    +- 5%
 
+  AD5270 20k potentiometer:
+  SPI (MOSI/MISO/CLK)
+  CC: pin 16
+
+  MAX5481 10k potentiometer:
+  SPI (MOSI/CLK)
+  CC: pin 17
+
   INFOS:
   Librairie ESP32 Utilisé avec comme board ESP32_FireBeetle pour l'ESP Wroom
   https://techtutorialsx.com/2017/06/05/esp-wroom-32-uploading-a-program-with-arduino-ide/
@@ -69,6 +72,8 @@
   BOARD: ESP32 Arduino --> ESP32 Dev Module
   Partition size = 16 MB
 */
+
+
 
 #include <Wire.h>
 #include <MCP342x.h>
@@ -86,10 +91,11 @@
 #include "AD5270.h"
 
 
+
 /*==============================================================================
 **                             Local Defines                                    **
   ================================================================================*/
-#define EMULATEUR 0
+#define EMULATEUR 1
 
 #define LED_PIN      25
 #define CLOCK_PIN    32
@@ -101,11 +107,10 @@
 #define INH_EN_LDO   23
 
 #define DELAY_PWM         10
-#define DELAY_LOOP        420
-#define DELAY_SEND_BLE    51
+#define DELAY_LOOP_BLE_ACTIVE  500
+#define DELAY_LOOP_BLE_NOTACTIVE  2000
 
 #define CLOCK_FREQ   1500
-
 
 #define BRIGHTNESS_LED 121    // 8 Bits
 
@@ -117,10 +122,6 @@
 #define VCC 3.30    //Supply voltage
 #define R 10000  //R=10KΩ
 
-// #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
-// #error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
-// #endif
-
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
 
@@ -130,7 +131,7 @@
 // #define SERVICE_TEMP_UUID        "1defff16-5a0a-423b-b2d1-8abcddb67d8a"
 // #define CHARACTERISTIC_TEMP_UUID "58f7494b-2e34-4bf3-ac42-9bd49445f277"
 
-//original
+//original NORDIC UUID
 #define SERVICE_UUID           "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
@@ -158,12 +159,11 @@ int virgCharIndex = 0;
 SPIClass* hspi = NULL;
 SPIClass* vspi = NULL;
 
+
+
 /*===============================================================================
 **                            Global Variables                                 **
   ===============================================================================*/
-
-
-
 // Le OUT BATTERIE est connecté au GPIO 36 (Pin VP)
 //const int Out_Bat_PIN = 39;
 //const int Out_Ntc_PIN = 36;
@@ -240,12 +240,21 @@ class MyCallbacks: public BLECharacteristicCallbacks {
 /*===============================================================================
 **                            SETUP()                                          **
   ===============================================================================*/
-
+/*
+   _________       __
+  /   _____/ _____/  |_ __ ________
+  \_____  \_/ __ \   __\  |  \____ \
+  /        \  ___/|  | |  |  /  |_> >
+  /_______  /\___  >__| |____/|   __/
+         \/     \/           |__|
+*/
 void setup() {
 
   //enable LDO
   pinMode(INH_EN_LDO, INPUT);
+
   //important DELAY FOR BOOTING
+  //reduce charge on the LDO before activate ESP32
   delay(2000);
 
   Temp_0 = 25 + 273.15;
@@ -288,7 +297,8 @@ void setup() {
     //mode 2 : CPOL=1 et CPHA=0.
     //mode 3 : CPOL=1 et CPHA=1.
 
-    AD5270_WriteReg(SW_RST, 0x00);  //SOFTWARE RESET POTENTIOMETER
+    //SOFTWARE RESET POTENTIOMETER
+    AD5270_WriteReg(SW_RST, 0x00);
     delay(10);
 
     AD5270_WriteRDAC(val_pot_20k);
@@ -348,7 +358,14 @@ void setup() {
 /*===============================================================================
 **                            LOOP()                                          **
   ===============================================================================*/
-
+/*
+  .____
+  |    |    ____   ____ ______
+  |    |   /  _ \ /  _ \\____ \
+  |    |__(  <_> |  <_> )  |_> >
+  |_______ \____/ \____/|   __/
+          \/            |__|
+*/
 void loop() {
 
   //period with millis()
@@ -374,8 +391,7 @@ void loop() {
     // ********* CLOCK *********
     ledcWrite(pwmChannel_clock, 127); //1.65 V de temps haut --> clock
 
-
-    // ********* READING ADC *********
+    // ********* READING ADC BATTERY VOLTAGE *********
     // Tension batterie ADC esp32
     OutBatValue = analogRead(OUT_BAT_PIN);
     OutBatValue = analogRead(OUT_BAT_PIN);
@@ -388,9 +404,8 @@ void loop() {
     //TENSION BAT 0.66*tension pile
     Serial.print(OutBatVolt);
     Serial.print(",");
-    //delay(250);
 
-    // ********* NTC *********
+    // ********* READING NTC TEMPERATURE VOLTAGE *********
     //Mesure ADC NTC  ADC ESP32
     VRT = analogRead(OUT_NTC_PIN);
     VRT = analogRead(OUT_NTC_PIN);
@@ -406,27 +421,18 @@ void loop() {
 
     ln = log(RT / RT0);
     TXX = (1 / ((ln / B) + (1 / Temp_0))); //Temperature from thermistor
-
     TXX = TXX - 273.15;                 //Conversion to Celsius
 
     //  Serial.print("Temp = ");
-    Serial.print(VRT);
+    Serial.print(VRT);  //ADC value
     Serial.print(",");
-    Serial.print(TXX);
+    Serial.print(TXX); //Temperature value
     Serial.print(",");
-    //  Serial.print(" °C ");
-    //  Serial.print(" \t ");
-    //BT
-    //SerialBT.print("Temp = ");
-    // SerialBT.print(TXX);
-    // SerialBT.print(" °C ");
-    // SerialBT.print(" \t ");
 
     // ********* I²C *********
     //***** Channel 1
-    // OUT_SENS sortie chaine normale
-    //long value = 0;  // Essai en int  16 Signed: int16_t
-    //int16_t value = 0;
+    // ********* READING CONDUCTIVIMETER/VIBRATION ADC16bit *********
+    // OUT_SENS output
 
     MCP342x::Config status;
     // Initiate a conversion; convertAndRead() will wait until it can be read
@@ -442,16 +448,15 @@ void loop() {
       Serial.print(",");
       Serial.print(value3_vib_cond);
       Serial.print(",");
-      //Serial.print(" \t ");
     }
 
 
 
     //***** Channel 2
-    //OUT_DIFF sortie ampli différentiel
+    // ********* READING AMPLIFIER DIFFERENTIAL ADC16bit *********
+    //OUT_DIFF OUTPUT
     long valueDiff = 0;
     // Essai en int  16 Signed: int16_t
-    //int16_t valueDiff = 0;
     //  MCP342x::Config status;
     // Initiate a conversion; convertAndRead() will wait until it can be read
     uint8_t err2 = adc.convertAndRead(MCP342x::channel2, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, valueDiff, status);
@@ -463,33 +468,26 @@ void loop() {
       //Serial.print("Out_DIFF_16Bits_signed: ");
       Serial.print(valueDiff);
       Serial.print(",");
-      //Serial.print(" \t ");
     }
 
-
-
-    // 32 767 est le max puisqu'il y a un bit de signe
-    // Donc sur 15 Bits puisqu'on est en single ended
-
     // ********* Conversion en Volt *********
-
     fOutSens_V = (VREF_ADC / 32767 ) * value; // Attention vref = 2.048 V
     //Serial.print("OUT_SENS = ");
     Serial.print(fOutSens_V);
 
-    // ********** potentiometre 20K ***************************
+    // ********** SEND VALUE potentiometre 20K **********************
     Serial.print(",");
     Serial.print(val_pot_20k);
 
-    // ********** potentiometre 10K ***************************
+    // ********** SEND VALUE potentiometre 10K **********************
     Serial.print(",");
     Serial.print(val_pot_10k);
   }
   else
   {
     delay(200);
-    //EMULATION
-    //16bits
+    //SIGNAL EMULATION for android debugging
+
     value2 = value2 + 64;
     if (value2 >= 65536) value2 = 0;
 
@@ -516,6 +514,7 @@ void loop() {
 
     // Let's convert the value to a char array:
     char txString[16]; // make sure this is big enuffz
+
     if (EMULATEUR == 0)
     {
       dtostrf(value3_vib_cond, 7, 0, txString); // float_val, min_width, digits_after_decimal, char_buffer
@@ -550,7 +549,8 @@ void loop() {
     pCharacteristic->setValue(txString);
 
     pCharacteristic->notify();
-    delay(500);
+
+    delay(DELAY_LOOP_BLE_ACTIVE);
 
     Serial.print(",");
     Serial.println(txString);
@@ -565,7 +565,6 @@ void loop() {
       Serial.println(inStringBleReceive);
 
       virgCharIndex = inStringBleReceive.indexOf(',');
-
 
       if (virgCharIndex != -1)
       {
@@ -603,8 +602,11 @@ void loop() {
           //change AD5270 potentimeter 20k
           hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_MAX5481_10K);  //SCLK, MISO, MOSI, SS
           pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
-          val_pot_10k=WriteMax5481Pot(val_pot_10k, 0); // HSPI ok à l'ocillo
-
+          val_pot_10k = WriteMax5481Pot(val_pot_10k, 0); // HSPI ok à l'ocillo
+        }
+        else
+        {
+          val_pot_10k = WriteMax5481Pot(val_pot_10k, 0); // to observe algo pot 10k on 5bit
         }
       }
       else
@@ -618,8 +620,8 @@ void loop() {
     }
   }
   else
-
   {
+    //device BLE not connected
     Serial.println();
   }
 
@@ -633,35 +635,35 @@ void loop() {
   }
 
 
-  // connecting
+  //Connecting BLE DEVICE
   if (deviceConnected && !oldDeviceConnected) {
     // do stuff here on connecting
     oldDeviceConnected = deviceConnected;
     Serial.println("Device connected ;-)");
   }
 
-  //delay(DELAY_LOOP) ;
+  //DISCONNECTED BLE DEVICE
   if (!deviceConnected)
   {
-    delay(2000);
+    //low reading cycle for reduce power
+    delay(DELAY_LOOP_BLE_NOTACTIVE);
     //blink led
     digitalWrite(LED_PIN, HIGH);
     delay(5);
     digitalWrite(LED_PIN, LOW);
   }
-
-  // Voir pour plus de chiffre sur le float
 }
 
 
 
-
-
-
-
-
-
-
+/*
+  _____________________________           _______________   __
+  \______   \_____  \__    ___/           \_____  \   _  \ |  | __
+   |     ___//   |   \|    |      ______   /  ____/  /_\  \|  |/ /
+   |    |   /    |    \    |     /_____/  /       \  \_/   \    <
+   |____|   \_______  /____|              \_______ \_____  /__|_ \
+                    \/                            \/     \/     \/
+*/
 ////POTENTIOMMETER functions AD5270
 
 /**
@@ -672,6 +674,9 @@ void loop() {
 uint16_t AD5270_CalcRDAC(float resistance) {
   return ((uint16_t)((resistance / MAX_RESISTANCE) * 1023.0));
 }
+
+
+
 /**
    @brief sets a new value for the RDAC
    @param resistance new value for the resistance
@@ -933,26 +938,34 @@ void AD5270_ChangeMode(AD5270Modes_t mode) {
 
 
 
-
+/*
+  _____________________________            ___________   __
+  \______   \_____  \__    ___/           /_   \   _  \ |  | __
+   |     ___//   |   \|    |      ______   |   /  /_\  \|  |/ /
+   |    |   /    |    \    |     /_____/   |   \  \_/   \    <
+   |____|   \_______  /____|               |___|\_____  /__|_ \
+                    \/                                \/     \/
+*/
 //fonctions potentiometer MAX5481
-int WriteMax5481Pot(long int stuff, int int_save_eeprom)
+
+int WriteMax5481Pot(long int ResPotValue, int int_save_eeprom)
 {
   int matStepPotMax5481[32] = {0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800, 832, 864, 896, 928, 960, 992};
   int matValPotMax5481[32] = {939, 1253, 1564, 1883, 2200, 2510, 2830, 3140, 3460, 3770, 4080, 4400, 4720, 5030, 5340, 5660, 5970, 6290, 6600, 6920, 7230, 7550, 7850, 8170, 8490, 8810, 9110, 9430, 9750, 10060, 10360, 10690};
 
-  long int cloneStuff = stuff;
+  long int cloneStuff = ResPotValue;
   int minEcart = 65000;
   int Ecart = 0;
   int indicePot = 0;
 
-Serial.println("--------- CONFIG POT 10K MAX5481 -------");
-    Serial.print("STUFF:");
-    Serial.println(stuff);
-    
+  Serial.println("--------- CONFIG POT 10K MAX5481 -------");
+  Serial.print("STUFF:");
+  Serial.println(ResPotValue);
+
   indicePot = 0;
   for (int jj = 0; jj < 32; jj++)
   {
-    Ecart = matValPotMax5481[jj] - stuff;
+    Ecart = matValPotMax5481[jj] - ResPotValue;
     if (Ecart < 0) Ecart = -Ecart;
 
     if (Ecart < minEcart)
@@ -965,43 +978,46 @@ Serial.println("--------- CONFIG POT 10K MAX5481 -------");
     Serial.print(indicePot);
     Serial.print("-Ecart:");
     Serial.print(Ecart);
-        Serial.print("-EcartMin:");
+    Serial.print("-EcartMin:");
     Serial.print(minEcart);
     Serial.print("-MAT_POT:");
     Serial.println(matValPotMax5481[jj]);
   }
 
-  stuff = matStepPotMax5481[indicePot];
+  ResPotValue = matStepPotMax5481[indicePot];
 
-    Serial.print("STUFF final:");
-    Serial.println(stuff);
-    
-  stuff = stuff << 6;
+  Serial.print("STUFF final:");
+  Serial.println(ResPotValue);
 
-  hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE0));
-  digitalWrite(HSPI_SS_MAX5481_10K, LOW);
-
-  hspi->transfer(0x00);
-  hspi->transfer((byte)((stuff & 0x0000FF00) >> 8));
-  hspi->transfer((byte)(stuff & 0x000000FF));  //ENVOIE Message : au lieu de transferer on va DPOT !
-
-  digitalWrite(HSPI_SS_MAX5481_10K, HIGH);
-  hspi->endTransaction();
-
-  delay(10);
-
-  if (int_save_eeprom == 1)
+  if (EMULATEUR == 0)
   {
+    //Send SPI frame
+    ResPotValue = ResPotValue << 6;
+
     hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE0));
     digitalWrite(HSPI_SS_MAX5481_10K, LOW);
 
-    hspi->transfer(0x20);  //ENVOIE Message : au lieu de transferer on va DPOT !
+    hspi->transfer(0x00);
+    hspi->transfer((byte)((ResPotValue & 0x0000FF00) >> 8));
+    hspi->transfer((byte)(ResPotValue & 0x000000FF));  //ENVOIE Message : au lieu de transferer on va DPOT !
 
     digitalWrite(HSPI_SS_MAX5481_10K, HIGH);
     hspi->endTransaction();
 
-    delay(13);
-  }
+    delay(10);
 
+    if (int_save_eeprom == 1)
+    {
+      hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE0));
+      digitalWrite(HSPI_SS_MAX5481_10K, LOW);
+
+      hspi->transfer(0x20);  //ENVOIE Message : au lieu de transferer on va DPOT !
+
+      digitalWrite(HSPI_SS_MAX5481_10K, HIGH);
+      hspi->endTransaction();
+
+      delay(13);
+    }
+  }//if not emulator
   return matValPotMax5481[indicePot];
 }

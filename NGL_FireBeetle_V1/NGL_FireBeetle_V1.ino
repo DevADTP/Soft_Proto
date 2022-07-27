@@ -89,7 +89,7 @@
 /*==============================================================================
 **                             Local Defines                                    **
   ================================================================================*/
-#define EMULATEUR 1
+#define EMULATEUR 0
 
 #define LED_PIN      25
 #define CLOCK_PIN    32
@@ -253,6 +253,15 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
+  //blink 20 fois rapide au demarrage
+  for (int kk=0;kk<20;kk++)
+  {
+    digitalWrite(LED_PIN, HIGH);
+    delay(10);
+    digitalWrite(LED_PIN, LOW);
+    delay(40);
+  }
+  
   if (EMULATEUR == 0)
   {
     //Setup_IO(); //enable power

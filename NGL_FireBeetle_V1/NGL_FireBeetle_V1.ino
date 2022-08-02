@@ -16,6 +16,18 @@
   =============================================================================*/
 
 /*
+  EMULATEUR
+  M5STACK  ATOM LITE connexion
+                ------------
+  GYRO -- 3V3  | 3V3        |
+  GYRO <- CS   | G22    G21 |
+  GYRO <- MOSI | G19    G25 |
+  GYRO <- CLK  | G23    5V  |
+  GYRO -> MISO | G33    GND | -- GYRO
+                ------------
+
+
+
   ------ SPI ------
   MISO      --> IO12
   MOSI      --> IO13
@@ -144,17 +156,32 @@
 //SPI POTENTIOMETER
 //20K AD5270 (spi IN/OUT)
 // carte NGL
-#define HSPI_MISO 12
-#define HSPI_MOSI 13
-#define HSPI_SCLK 14
-#define HSPI_SS_AD5270_20K 16
-#define HSPI_SS_MAX5481_10K 17
+//#define HSPI_MISO 12
+//#define HSPI_MOSI 13
+//#define HSPI_SCLK 14
+//#define HSPI_SS_AD5270_20K 16
+//#define HSPI_SS_MAX5481_10K 17
+
+//carte ELUMATEUR
+//                ------------
+//  GYRO -- 3V3  | 3V3        |
+//  GYRO <- CS   | G22    G21 |
+//  GYRO <- MOSI | G19    G25 |
+//  GYRO <- CLK  | G23    5V  |
+//  GYRO -> MISO | G33    GND | -- GYRO
+//                ------------
+#define HSPI_MISO 33
+#define HSPI_MOSI 19
+#define HSPI_SCLK 23
+#define HSPI_SS_AD5270_20K 22
+#define HSPI_SS_MAX5481_10K 22
 
 static const int spiClk = 500000;  // 1 MHz
 int val_pot_20k = 0;
 int val_pot_10k = 0;
 char buffer_pot[30];
 int virgCharIndex = 0;
+char txStringSendBle[35];  //65536,65536,50.0,4095,20000,10060
 
 SPIClass* hspi = NULL;
 SPIClass* vspi = NULL;
@@ -182,6 +209,7 @@ int int_onetime_enable = 1;
 
 float value2 = 0;
 float value3_vib_cond = 0;
+long valueDiff = 0;
 
 int pwmChannel = 0; //Choisit le canal 0
 int pwmChannel_clock = 1; //Choisit le canal 0
@@ -305,13 +333,37 @@ void setup() {
   }
   else
   {
+    //INIT SPI
+    hspi = new SPIClass(HSPI);
+
+    //clock miso mosi ss
+    pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
+    pinMode(HSPI_SS_AD5270_20K, OUTPUT);  //HSPI SS
+
+    //alternatively route through GPIO pins
+    hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_AD5270_20K);  //SCLK, MISO, MOSI, SS
+
+    pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
+
+    //mode 0 : CPOL=0 et CPHA=0.
+    //mode 1 : CPOL=0 et CPHA=1.
+    //mode 2 : CPOL=1 et CPHA=0.
+    //mode 3 : CPOL=1 et CPHA=1.
+
     Serial.begin(1500000);
     Serial.println("The device (NGL Sensors) started, now you can pair it with bluetooth!");
   }
 
   //________________________BLE______________________
   // Create the BLE Device
-  BLEDevice::init("NGL Sensors");
+  if (EMULATEUR == 0)
+  {
+    BLEDevice::init("NGL Sensors");
+  }
+  else
+  {
+    BLEDevice::init("Test Pot");
+  }
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
@@ -455,7 +507,6 @@ void loop() {
     //***** Channel 2
     // ********* READING AMPLIFIER DIFFERENTIAL ADC16bit *********
     //OUT_DIFF OUTPUT
-    long valueDiff = 0;
     // Essai en int  16 Signed: int16_t
     //  MCP342x::Config status;
     // Initiate a conversion; convertAndRead() will wait until it can be read
@@ -513,47 +564,52 @@ void loop() {
     digitalWrite(LED_PIN, LOW);
 
     // Let's convert the value to a char array:
-    char txString[16]; // make sure this is big enuffz
+    //char txString[16]; // make sure this is big enuffz
 
     if (EMULATEUR == 0)
     {
-      dtostrf(value3_vib_cond, 7, 0, txString); // float_val, min_width, digits_after_decimal, char_buffer
+      //dtostrf(value3_vib_cond, 7, 0, txString); // float_val, min_width, digits_after_decimal, char_buffer
     }
     else
     {
-      dtostrf(value2, 7, 0, txString); // float_val, min_width, digits_after_decimal, char_buffer
+      //dtostrf(value2, 7, 0, txString); // float_val, min_width, digits_after_decimal, char_buffer
     }
-    char txString2[10]; // make sure this is big enuffz
-    dtostrf(VRT, 5, 1, txString2); // float_val, min_width, digits_after_decimal, char_buffer
+    /*
+      char txString2[10]; // make sure this is big enuffz
+      dtostrf(VRT, 5, 1, txString2); // float_val, min_width, digits_after_decimal, char_buffer
 
-    //    La fonction dtostrf() prend quatre paramètres d’entrée.
-    //    La première est une variable de type double, que nous voulons convertir.
-    //    La seconde est une variable de type char utilisée pour définir la largeur de la variable de sortie ou le nombre de chiffres.
-    //    La troisième est une variable de type char utilisée pour définir le nombre de chiffres après la décimale.
+      //    La fonction dtostrf() prend quatre paramètres d’entrée.
+      //    La première est une variable de type double, que nous voulons convertir.
+      //    La seconde est une variable de type char utilisée pour définir la largeur de la variable de sortie ou le nombre de chiffres.
+      //    La troisième est une variable de type char utilisée pour définir le nombre de chiffres après la décimale.
 
-    int indice = 8;
-    txString[indice] = txString2[indice - 8];
-    indice++;
-    txString[indice] = txString2[indice - 8];
-    indice++;
-    txString[indice] = txString2[indice - 8];
-    indice++;
-    txString[indice] = txString2[indice - 8];
-    indice++;
-    txString[indice] = txString2[indice - 8];
+      int indice = 8;
+      txString[indice] = txString2[indice - 8];
+      indice++;
+      txString[indice] = txString2[indice - 8];
+      indice++;
+      txString[indice] = txString2[indice - 8];
+      indice++;
+      txString[indice] = txString2[indice - 8];
+      indice++;
+      txString[indice] = txString2[indice - 8];
 
-    //txString[14] = char(10);
-    txString[7] = 0x2C; //tab char(13);
-    txString[15] = 0x0A; //return line char(13);
+      //txString[14] = char(10);
+      txString[7] = 0x2C; //tab char(13);
+      txString[15] = 0x0A; //return line char(13);
 
-    pCharacteristic->setValue(txString);
+      pCharacteristic->setValue(txString);
+    */
+    //    sprintf(txStringSend, "%.2f,%.2f,%.3f", averageVoltage, tdsValue, conductivity);
+    sprintf(txStringSendBle, "%.0f,%d,%.1f,%d,%d,%d", value3_vib_cond, valueDiff, VRT, OutBatValue, val_pot_10k, val_pot_20k);
 
+    pCharacteristic->setValue(txStringSendBle);
     pCharacteristic->notify();
 
     delay(DELAY_LOOP_BLE_ACTIVE);
 
-    Serial.print(",");
-    Serial.println(txString);
+    Serial.print(",ble:");
+    Serial.println(txStringSendBle);
 
     //---------- BLE RECEIVE ---------------------------
     if (boolReceive == true)
@@ -568,14 +624,14 @@ void loop() {
 
       if (virgCharIndex != -1)
       {
-        //format 20k potentiometer
-        StringRes20k = inStringBleReceive.substring(0, virgCharIndex);
-        Serial.print("20k: ");
-        Serial.println(StringRes20k);
-
-        StringRes10k = inStringBleReceive.substring((virgCharIndex + 1), inStringBleReceive.length());
-        Serial.print("10k: ");
+        //format 10k potentiometer
+        StringRes10k = inStringBleReceive.substring(0, virgCharIndex);
+        Serial.print("IN-10k: ");
         Serial.println(StringRes10k);
+
+        StringRes20k = inStringBleReceive.substring((virgCharIndex + 1), inStringBleReceive.length());
+        Serial.print("OUT-20k: ");
+        Serial.println(StringRes20k);
 
         val_pot_20k = StringRes20k.toInt();
         //controle 20k potentiometer
@@ -606,6 +662,8 @@ void loop() {
         }
         else
         {
+          hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_MAX5481_10K);  //SCLK, MISO, MOSI, SS
+          pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
           val_pot_10k = WriteMax5481Pot(val_pot_10k, 0); // to observe algo pot 10k on 5bit
         }
       }
@@ -1019,5 +1077,40 @@ int WriteMax5481Pot(long int ResPotValue, int int_save_eeprom)
       delay(13);
     }
   }//if not emulator
+
+  else
+  {
+    //emulateur
+    //Send SPI frame
+    ResPotValue = ResPotValue << 6;
+
+    hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE0));
+    digitalWrite(HSPI_SS_MAX5481_10K, LOW);
+
+    hspi->transfer(0x00);
+    hspi->transfer((byte)((ResPotValue & 0x0000FF00) >> 8));
+    hspi->transfer((byte)(ResPotValue & 0x000000FF));  //ENVOIE Message : au lieu de transferer on va DPOT !
+
+    digitalWrite(HSPI_SS_MAX5481_10K, HIGH);
+    hspi->endTransaction();
+
+    delay(10);
+
+    if (int_save_eeprom == 1)
+    {
+      hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE0));
+      digitalWrite(HSPI_SS_MAX5481_10K, LOW);
+
+      hspi->transfer(0x20);  //ENVOIE Message : au lieu de transferer on va DPOT !
+
+      digitalWrite(HSPI_SS_MAX5481_10K, HIGH);
+      hspi->endTransaction();
+
+      delay(13);
+    }
+  }
+
+
+
   return matValPotMax5481[indicePot];
 }

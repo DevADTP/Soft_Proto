@@ -107,7 +107,7 @@
 /*==============================================================================
 **                             Local Defines                                    **
   ================================================================================*/
-#define EMULATEUR 1
+#define EMULATEUR 0
 
 #define LED_PIN      25
 #define CLOCK_PIN    32
@@ -156,11 +156,12 @@
 //SPI POTENTIOMETER
 //20K AD5270 (spi IN/OUT)
 // carte NGL
-//#define HSPI_MISO 12
-//#define HSPI_MOSI 13
-//#define HSPI_SCLK 14
-//#define HSPI_SS_AD5270_20K 16
-//#define HSPI_SS_MAX5481_10K 17
+#define HSPI_MISO 12
+#define HSPI_MOSI 13
+#define HSPI_SCLK 14
+#define HSPI_SS_AD5270_20K 16
+#define HSPI_SS_MAX5481_10K 17 //origine carte 10K
+#define HSPI_SS_AD5270_20K_IN 15  //modif ajout POT 20k externe CS_SPARE
 
 //carte ELUMATEUR
 //                ------------
@@ -170,11 +171,11 @@
 //  GYRO <- CLK  | G23    5V  |
 //  GYRO -> MISO | G33    GND | -- GYRO
 //                ------------
-#define HSPI_MISO 33
-#define HSPI_MOSI 19
-#define HSPI_SCLK 23
-#define HSPI_SS_AD5270_20K 22
-#define HSPI_SS_MAX5481_10K 22
+//#define HSPI_MISO 33
+//#define HSPI_MOSI 19
+//#define HSPI_SCLK 23
+//#define HSPI_SS_AD5270_20K 22
+//#define HSPI_SS_MAX5481_10K 22
 
 static const int spiClk = 500000;  // 1 MHz
 int val_pot_20k = 0;
@@ -182,6 +183,7 @@ int val_pot_10k = 0;
 char buffer_pot[30];
 int virgCharIndex = 0;
 char txStringSendBle[35];  //65536,65536,50.0,4095,20000,10060
+int int_pot20k_input = 0;
 
 SPIClass* hspi = NULL;
 SPIClass* vspi = NULL;
@@ -246,6 +248,10 @@ class MyServerCallbacks: public BLEServerCallbacks {
 String inStringBleReceive = "";
 String StringRes20k = "";
 String StringRes10k = "";
+float floatRealValueRIn = 0.0;
+float floatRealValueROut = 0.0;
+  float RreadADC = 0.0;
+  float floatvallocaltemp = 0.0;
 
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
@@ -302,6 +308,7 @@ void setup() {
 
   if (EMULATEUR == 0)
   {
+    //Capteur NGL
     //Setup_IO(); //enable power
     Setup_PWM();
     Setup_ADC();
@@ -313,11 +320,16 @@ void setup() {
 
     //clock miso mosi ss
     pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
+
+    //CS HIGH
     pinMode(HSPI_SS_AD5270_20K, OUTPUT);  //HSPI SS
+    pinMode(HSPI_SS_AD5270_20K_IN, OUTPUT);  //HSPI SS
+    digitalWrite(HSPI_SS_AD5270_20K, HIGH);
+    digitalWrite(HSPI_SS_AD5270_20K_IN, HIGH);
 
     //alternatively route through GPIO pins
     hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_AD5270_20K);  //SCLK, MISO, MOSI, SS
-
+    //force pull up for POT 20K running
     pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
 
     //mode 0 : CPOL=0 et CPHA=0.
@@ -326,13 +338,23 @@ void setup() {
     //mode 3 : CPOL=1 et CPHA=1.
 
     //SOFTWARE RESET POTENTIOMETER
+    int_pot20k_input = 0;
     AD5270_WriteReg(SW_RST, 0x00);
     delay(10);
+    floatRealValueROut = AD5270_WriteRDAC(val_pot_20k);
+    delay(10);
 
-    AD5270_WriteRDAC(val_pot_20k);
+    int_pot20k_input = 1;
+    AD5270_WriteReg(SW_RST, 0x00);
+    delay(10);
+    floatRealValueRIn = AD5270_WriteRDAC(val_pot_10k);
+    delay(10);
+
+    int_pot20k_input = 0;
   }
   else
   {
+    //EMULATEUR
     //INIT SPI
     hspi = new SPIClass(HSPI);
 
@@ -342,7 +364,7 @@ void setup() {
 
     //alternatively route through GPIO pins
     hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_AD5270_20K);  //SCLK, MISO, MOSI, SS
-
+    //force pull up for POT 20K running
     pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
 
     //mode 0 : CPOL=0 et CPHA=0.
@@ -362,7 +384,7 @@ void setup() {
   }
   else
   {
-    BLEDevice::init("Test Pot");
+    BLEDevice::init("Emulateur");
   }
 
   // Create the BLE Server
@@ -601,7 +623,7 @@ void loop() {
       pCharacteristic->setValue(txString);
     */
     //    sprintf(txStringSend, "%.2f,%.2f,%.3f", averageVoltage, tdsValue, conductivity);
-    sprintf(txStringSendBle, "%.0f,%d,%.1f,%d,%d,%d", value3_vib_cond, valueDiff, VRT, OutBatValue, val_pot_10k, val_pot_20k);
+    sprintf(txStringSendBle, "%.0f,%d,%.1f,%d,%.0f,%.0f", value3_vib_cond, valueDiff, VRT, OutBatValue, floatRealValueRIn, floatRealValueROut);
 
     pCharacteristic->setValue(txStringSendBle);
     pCharacteristic->notify();
@@ -649,16 +671,25 @@ void loop() {
 
         if (EMULATEUR == 0)
         {
-          //change AD5270 potentimeter 20k
+          //ADD AD5270 potentiometer 20k externe limited to 10k
           //alternatively route through GPIO pins
-          hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_AD5270_20K);  //SCLK, MISO, MOSI, SS
+          int_pot20k_input = 1;
+          hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_AD5270_20K_IN);  //SCLK, MISO, MOSI, SS
           pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
-          AD5270_WriteRDAC(val_pot_20k);
+          floatRealValueRIn = AD5270_WriteRDAC(val_pot_10k);
 
           //change AD5270 potentimeter 20k
-          hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_MAX5481_10K);  //SCLK, MISO, MOSI, SS
+          //alternatively route through GPIO pins
+          int_pot20k_input = 0;
+          hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_AD5270_20K);  //SCLK, MISO, MOSI, SS
           pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
-          val_pot_10k = WriteMax5481Pot(val_pot_10k, 0); // HSPI ok à l'ocillo
+          floatRealValueROut = AD5270_WriteRDAC(val_pot_20k);
+
+
+          //change AD5270 potentimeter 20k
+          //          hspi->begin(HSPI_SCLK, HSPI_MISO, HSPI_MOSI, HSPI_SS_MAX5481_10K);  //SCLK, MISO, MOSI, SS
+          //          pinMode(HSPI_MISO, INPUT_PULLUP);  //HSPI SS pinMode(2, INPUT_PULLUP);
+          //          val_pot_10k = WriteMax5481Pot(val_pot_10k, 0); // HSPI ok à l'ocillo
         }
         else
         {
@@ -740,9 +771,9 @@ uint16_t AD5270_CalcRDAC(float resistance) {
    @param resistance new value for the resistance
    @return actual value of the resistance in the RDAC
 */
-float RreadADC = 0;
-uint16_t AD5270_WriteRDAC(float resistance) {
 
+float AD5270_WriteRDAC(float resistance)
+{
   uint16_t setValue = 0x00;
 
   uint16_t RDAC_Val = AD5270_CalcRDAC(resistance);
@@ -778,8 +809,24 @@ uint16_t AD5270_WriteRDAC(float resistance) {
   RreadADC = AD5270_ReadRDAC();
   delayMicroseconds(10);
 
-  Serial.print("ReadADC ");
-  Serial.println((int)RreadADC);
+  floatvallocaltemp = ((float)RDAC_Val * (MAX_RESISTANCE / 1023.0));
+
+  if (RreadADC != floatvallocaltemp)
+  {
+    Serial.println("!!! WARNING !!!! PROBLEM POT PROGRAMMING");
+    Serial.print("RreadADC:");
+    Serial.println(RreadADC);
+    Serial.print("RDAC_Val:");
+    Serial.println(floatvallocaltemp);
+  }
+  else
+  {
+    Serial.println("POT GOOD PROGRAMMING");
+    Serial.print("RreadADC:");
+    Serial.println(RreadADC);
+    Serial.print("RDAC_Val:");
+    Serial.println(floatvallocaltemp);
+  }
 
   //MISO high impedance
   AD5270_WriteReg(0x80, 0x01);   //0xAA dummy
@@ -787,7 +834,7 @@ uint16_t AD5270_WriteRDAC(float resistance) {
   AD5270_WriteReg(0x00, 0x00);   //0xAA dummy
   delayMicroseconds(10);
 
-  return RDAC_Val;
+  return (float)floatvallocaltemp;
 }
 
 
@@ -802,29 +849,65 @@ float AD5270_ReadRDAC(void) {
   uint16_t result2 = 0;
 
   hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE1));
-  digitalWrite(HSPI_SS_AD5270_20K, LOW);
 
-  hspi->transfer(READ_CTRL_REG);
+  if (int_pot20k_input == 0)
+  {
+    digitalWrite(HSPI_SS_AD5270_20K, LOW);
+  }
+  else
+  {
+    digitalWrite(HSPI_SS_AD5270_20K_IN, LOW);
+  }
+
+  result2 = hspi->transfer(READ_CTRL_REG);
   result = hspi->transfer(0xAA);
 
-  digitalWrite(HSPI_SS_AD5270_20K, HIGH);
+  if (int_pot20k_input == 0)
+  {
+    digitalWrite(HSPI_SS_AD5270_20K, HIGH);
+  }
+  else
+  {
+    digitalWrite(HSPI_SS_AD5270_20K_IN, HIGH);
+  }
   hspi->endTransaction();
 
+
+  RDAC_val = ((result2 & 0x03) << 8) | result;
+  Serial.println();
+  Serial.print("RDAC-READ:");
+  sprintf(buffer_pot, "%04X", RDAC_val);
+  Serial.println(buffer_pot);
+
   hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE1));
-  digitalWrite(HSPI_SS_AD5270_20K, LOW);
+  if (int_pot20k_input == 0)
+  {
+    digitalWrite(HSPI_SS_AD5270_20K, LOW);
+  }
+  else
+  {
+    digitalWrite(HSPI_SS_AD5270_20K_IN, LOW);
+  }
 
   hspi->transfer(READ_CTRL_REG);
   result2 = hspi->transfer(0xAA);
 
-  digitalWrite(HSPI_SS_AD5270_20K, HIGH);
+  if (int_pot20k_input == 0)
+  {
+    digitalWrite(HSPI_SS_AD5270_20K, HIGH);
+  }
+  else
+  {
+    digitalWrite(HSPI_SS_AD5270_20K_IN, HIGH);
+  }
   hspi->endTransaction();
 
-  RDAC_val = (result2 << 8) | result;
+  //RDAC_val = (result2 << 8) | result;
 
   //RDAC_val = AD5270_ReadReg(READ_CTRL_REG);
   //RDAC_val &= 0x03FF;
 
-  return (((float)(RDAC_val) * MAX_RESISTANCE) / 1024.0);
+  return ((float)(RDAC_val) * (MAX_RESISTANCE / 1023.0));
 }
 
 
@@ -932,14 +1015,27 @@ void AD5270_WriteReg(uint8_t command, uint16_t value) {
   //SPI_Write(data,2, AD5270);
 
   hspi->beginTransaction(SPISettings(spiClk, MSBFIRST, SPI_MODE1));
-  digitalWrite(HSPI_SS_AD5270_20K, LOW);
-
+  if (int_pot20k_input == 0)
+  {
+    digitalWrite(HSPI_SS_AD5270_20K, LOW);
+  }
+  else
+  {
+    digitalWrite(HSPI_SS_AD5270_20K_IN, LOW);
+  }
 
   //hspi->transfer((byte)((stuff & 0x00FF0000)>>16));
   hspi->transfer((byte)command);
   hspi->transfer((byte)data[1]);
 
-  digitalWrite(HSPI_SS_AD5270_20K, HIGH);
+  if (int_pot20k_input == 0)
+  {
+    digitalWrite(HSPI_SS_AD5270_20K, HIGH);
+  }
+  else
+  {
+    digitalWrite(HSPI_SS_AD5270_20K_IN, HIGH);
+  }
   hspi->endTransaction();
 }
 

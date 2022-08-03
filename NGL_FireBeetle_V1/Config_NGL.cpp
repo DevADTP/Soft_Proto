@@ -98,7 +98,7 @@ void Setup_I2C(void)
 
 void Setup_SERIAL(void)
 {
-  Serial.begin(115200);
+  Serial.begin(1500000);
 
   Serial.println("The device (NGL Sensors) started, now you can pair it with bluetooth!");
 }

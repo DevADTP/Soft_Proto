@@ -87,7 +87,7 @@ extern "C" {
 
 
     uint16_t AD5270_CalcRDAC(float resistance);
-    uint16_t AD5270_WriteRDAC(float resistance);
+       float AD5270_WriteRDAC(float resistance);
     uint16_t AD5270_read_RDAC(void);
     float AD5270_ReadRDAC(void);
     void AD5270_Set_SDO_HiZ(void);
@@ -99,6 +99,7 @@ extern "C" {
     void AD5270_ChangeMode(AD5270Modes_t mode);
     uint16_t AD5270_ReadReg(uint8_t command);
     void AD5270_WriteReg(uint8_t command, uint16_t value);
+
 
 #ifdef  __cplusplus
 }

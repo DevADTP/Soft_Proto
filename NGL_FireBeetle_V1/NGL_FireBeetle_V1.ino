@@ -207,6 +207,12 @@ float RT, VR, ln, TXX, Temp_0, VRT;
 
 unsigned long ulong_time_now = 0;
 unsigned long ulong_time_enablepower_change = 0;
+
+unsigned long ulong_time_loopStd = 0;
+int intExecCycleStd = 0;
+unsigned long ulong_time_loopBle = 0;
+int intExecCycleBle = 0;
+
 int int_onetime_enable = 1;
 
 float value2 = 0;
@@ -250,8 +256,8 @@ String StringRes20k = "";
 String StringRes10k = "";
 float floatRealValueRIn = 0.0;
 float floatRealValueROut = 0.0;
-  float RreadADC = 0.0;
-  float floatvallocaltemp = 0.0;
+float RreadADC = 0.0;
+float floatvallocaltemp = 0.0;
 
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
@@ -445,6 +451,18 @@ void loop() {
   //period with millis()
   ulong_time_now = millis();
 
+  if ((ulong_time_now >= ulong_time_loopStd))
+  {
+    ulong_time_loopStd = millis() + DELAY_LOOP_BLE_NOTACTIVE;
+    intExecCycleStd = 1;
+  }
+
+  if ((ulong_time_now >= ulong_time_loopBle))
+  {
+    ulong_time_loopBle = millis() + DELAY_LOOP_BLE_ACTIVE;
+    intExecCycleBle = 1;
+  }
+
   if ((ulong_time_now >= ulong_time_enablepower_change))
   {
     ulong_time_enablepower_change = millis() + WAIT_ACTIVE_ENABLE_POWER;
@@ -470,14 +488,20 @@ void loop() {
     OutBatValue = analogRead(OUT_BAT_PIN);
     OutBatValue = analogRead(OUT_BAT_PIN);
     OutBatValue = analogRead(OUT_BAT_PIN);
-    //ADC
-    Serial.print(OutBatVolt);
-    Serial.print(",");
+    if (intExecCycleStd == 1)
+    {
+      //ADC
+      Serial.print(OutBatVolt);
+      Serial.print(",");
+    }
     OutBatVolt  = OutBatValue * (3.3 / 4096) / 0.66; //Conversion en volt des 12 Bits
     //Serial.print("Out_Bat = ");
     //TENSION BAT 0.66*tension pile
-    Serial.print(OutBatVolt);
-    Serial.print(",");
+    if (intExecCycleStd == 1)
+    {
+      Serial.print(OutBatVolt);
+      Serial.print(",");
+    }
 
     // ********* READING NTC TEMPERATURE VOLTAGE *********
     //Mesure ADC NTC  ADC ESP32
@@ -497,12 +521,14 @@ void loop() {
     TXX = (1 / ((ln / B) + (1 / Temp_0))); //Temperature from thermistor
     TXX = TXX - 273.15;                 //Conversion to Celsius
 
-    //  Serial.print("Temp = ");
-    Serial.print(VRT);  //ADC value
-    Serial.print(",");
-    Serial.print(TXX); //Temperature value
-    Serial.print(",");
-
+    if (intExecCycleStd == 1)
+    {
+      //  Serial.print("Temp = ");
+      Serial.print(VRT);  //ADC value
+      Serial.print(",");
+      Serial.print(TXX); //Temperature value
+      Serial.print(",");
+    }
     // ********* I²C *********
     //***** Channel 1
     // ********* READING CONDUCTIVIMETER/VIBRATION ADC16bit *********
@@ -512,16 +538,19 @@ void loop() {
     // Initiate a conversion; convertAndRead() will wait until it can be read
     uint8_t err = adc.convertAndRead(MCP342x::channel1, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, value, status);
     value3_vib_cond = value;
-    if (err) {
-      Serial.print("ADC16bit OUT_SENS error: ");
-      Serial.println(err);
-    }
-    else {
-      //Serial.print("Out_SENS_16Bits_signed: ");
-      Serial.print(value);
-      Serial.print(",");
-      Serial.print(value3_vib_cond);
-      Serial.print(",");
+    if (intExecCycleStd == 1)
+    {
+      if (err) {
+        Serial.print("ADC16bit OUT_SENS error: ");
+        Serial.println(err);
+      }
+      else {
+        //Serial.print("Out_SENS_16Bits_signed: ");
+        Serial.print(value);
+        Serial.print(",");
+        Serial.print(value3_vib_cond);
+        Serial.print(",");
+      }
     }
 
 
@@ -533,32 +562,39 @@ void loop() {
     //  MCP342x::Config status;
     // Initiate a conversion; convertAndRead() will wait until it can be read
     uint8_t err2 = adc.convertAndRead(MCP342x::channel2, MCP342x::oneShot, MCP342x::resolution16, MCP342x::gain1, 1000000, valueDiff, status);
-    if (err) {
-      Serial.print("ADC16bit OUT_DIFF error: ");
-      Serial.println(err);
-    }
-    else {
-      //Serial.print("Out_DIFF_16Bits_signed: ");
-      Serial.print(valueDiff);
-      Serial.print(",");
+    if (intExecCycleStd == 1)
+    {
+      if (err) {
+        Serial.print("ADC16bit OUT_DIFF error: ");
+        Serial.println(err);
+      }
+      else {
+        //Serial.print("Out_DIFF_16Bits_signed: ");
+        Serial.print(valueDiff);
+        Serial.print(",");
+      }
     }
 
     // ********* Conversion en Volt *********
     fOutSens_V = (VREF_ADC / 32767 ) * value; // Attention vref = 2.048 V
-    //Serial.print("OUT_SENS = ");
-    Serial.print(fOutSens_V);
 
-    // ********** SEND VALUE potentiometre 20K **********************
-    Serial.print(",");
-    Serial.print(val_pot_20k);
+    if (intExecCycleStd == 1)
+    {
+      //Serial.print("OUT_SENS = ");
+      Serial.print(fOutSens_V);
 
-    // ********** SEND VALUE potentiometre 10K **********************
-    Serial.print(",");
-    Serial.print(val_pot_10k);
+      // ********** SEND VALUE potentiometre 20K **********************
+      Serial.print(",");
+      Serial.print(val_pot_20k);
+
+      // ********** SEND VALUE potentiometre 10K **********************
+      Serial.print(",");
+      Serial.print(val_pot_10k);
+    }
   }
   else
   {
-    delay(200);
+    //delay(200);
     //SIGNAL EMULATION for android debugging
 
     value2 = value2 + 64;
@@ -568,18 +604,22 @@ void loop() {
     VRT = VRT + 4;
     if (VRT >= 4096) VRT = 0;
 
-    Serial.print(value2);
-    Serial.print(",");
-    Serial.print(VRT);
-    Serial.print(",");
-    Serial.print(val_pot_20k);
-    Serial.print(",");
-    Serial.print(val_pot_10k);
+    if (intExecCycleStd == 1)
+    {
+      Serial.print(value2);
+      Serial.print(",");
+      Serial.print(VRT);
+      Serial.print(",");
+      Serial.print(val_pot_10k);
+      Serial.print(",");
+      Serial.print(val_pot_20k);
+    }
   }
 
   //------------------ BLE -------------------------
-  if (deviceConnected) {
+  if (deviceConnected && (intExecCycleBle == 1)) {
 
+    intExecCycleBle = 0;
     //blink led
     digitalWrite(LED_PIN, HIGH);
     delay(10);
@@ -628,7 +668,7 @@ void loop() {
     pCharacteristic->setValue(txStringSendBle);
     pCharacteristic->notify();
 
-    delay(DELAY_LOOP_BLE_ACTIVE);
+    //delay(DELAY_LOOP_BLE_ACTIVE);
 
     Serial.print(",ble:");
     Serial.println(txStringSendBle);
@@ -710,37 +750,47 @@ void loop() {
   }
   else
   {
-    //device BLE not connected
-    Serial.println();
+    if (intExecCycleStd == 1)
+    {
+      //device BLE not connected
+      Serial.println();
+    }
   }
 
 
-  // disconnecting
-  if (!deviceConnected && oldDeviceConnected) {
-    delay(500); // give the bluetooth stack the chance to get things ready
-    pServer->startAdvertising(); // restart advertising
-    Serial.println("start advertising");
-    oldDeviceConnected = deviceConnected;
-  }
-
-
-  //Connecting BLE DEVICE
-  if (deviceConnected && !oldDeviceConnected) {
-    // do stuff here on connecting
-    oldDeviceConnected = deviceConnected;
-    Serial.println("Device connected ;-)");
-  }
-
-  //DISCONNECTED BLE DEVICE
-  if (!deviceConnected)
+  if (intExecCycleStd == 1)
   {
-    //low reading cycle for reduce power
-    delay(DELAY_LOOP_BLE_NOTACTIVE);
-    //blink led
-    digitalWrite(LED_PIN, HIGH);
-    delay(5);
-    digitalWrite(LED_PIN, LOW);
-  }
+    intExecCycleStd = 0;
+
+    // disconnecting
+    if (!deviceConnected && oldDeviceConnected) {
+      delay(500); // give the bluetooth stack the chance to get things ready
+      pServer->startAdvertising(); // restart advertising
+      Serial.println("start advertising");
+      oldDeviceConnected = deviceConnected;
+    }
+
+
+    //Connecting BLE DEVICE
+    if (deviceConnected && !oldDeviceConnected) {
+      // do stuff here on connecting
+      oldDeviceConnected = deviceConnected;
+      Serial.println("Device connected ;-)");
+    }
+
+    //DISCONNECTED BLE DEVICE
+    if (!deviceConnected)
+    {
+      //low reading cycle for reduce power
+      //delay(DELAY_LOOP_BLE_NOTACTIVE);
+
+      //blink led
+      digitalWrite(LED_PIN, HIGH);
+      delay(5);
+      digitalWrite(LED_PIN, LOW);
+    }
+
+  } //fin intExecCycleStd
 }
 
 
